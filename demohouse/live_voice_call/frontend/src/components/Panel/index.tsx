@@ -43,7 +43,6 @@ export const Panel = () => {
   const [llmParameters, setLlmParameters] = useState({
     question: '',
     answer: '',
-    user_responds: '',
     question_stem: '',
     student_name: '',
     question_category: '',
@@ -116,16 +115,6 @@ export const Panel = () => {
           <Grid.Row gutter={16}>
             <Grid.Col span={12}>
               <div className={'mb-3'}>
-                <label className={'block text-sm font-medium mb-1'}>User Responds</label>
-                <Input
-                  value={llmParameters.user_responds}
-                  onChange={(value) => setLlmParameters(prev => ({ ...prev, user_responds: value }))}
-                  placeholder="Enter user responds"
-                />
-              </div>
-            </Grid.Col>
-            <Grid.Col span={12}>
-              <div className={'mb-3'}>
                 <label className={'block text-sm font-medium mb-1'}>Question Stem</label>
                 <Input
                   value={llmParameters.question_stem}
@@ -134,8 +123,6 @@ export const Panel = () => {
                 />
               </div>
             </Grid.Col>
-          </Grid.Row>
-          <Grid.Row gutter={16}>
             <Grid.Col span={12}>
               <div className={'mb-3'}>
                 <label className={'block text-sm font-medium mb-1'}>Student Name</label>
@@ -146,6 +133,8 @@ export const Panel = () => {
                 />
               </div>
             </Grid.Col>
+          </Grid.Row>
+          <Grid.Row gutter={16}>
             <Grid.Col span={12}>
               <div className={'mb-3'}>
                 <label className={'block text-sm font-medium mb-1'}>Question Category</label>

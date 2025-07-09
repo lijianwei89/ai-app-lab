@@ -79,7 +79,6 @@ class LLMParametersPayload(WebPayload, BaseModel):
     Attributes:
         question (Optional[str]): The question parameter.
         answer (Optional[str]): The answer parameter.
-        user_responds (Optional[str]): The user responds parameter.
         question_stem (Optional[str]): The question stem parameter.
         student_name (Optional[str]): The student name parameter.
         question_category (Optional[str]): The question category parameter.
@@ -87,7 +86,6 @@ class LLMParametersPayload(WebPayload, BaseModel):
 
     question: Optional[str] = None
     answer: Optional[str] = None
-    user_responds: Optional[str] = None
     question_stem: Optional[str] = None
     student_name: Optional[str] = None
     question_category: Optional[str] = None
