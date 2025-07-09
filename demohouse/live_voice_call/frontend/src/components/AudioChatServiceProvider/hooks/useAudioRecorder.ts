@@ -19,7 +19,7 @@ import { EventType } from '@/types';
 import { useLogContent } from '@/components/AudioChatServiceProvider/hooks/useLogContent';
 import { useAudioChatState } from '@/components/AudioChatProvider/hooks/useAudioChatState';
 
-export const useAudioRecorder = () => {
+export const useAudioRecorder = (onRecordStop?: () => void) => {
   const {
     serviceRef,
     waveRef,
@@ -51,13 +51,16 @@ export const useAudioRecorder = () => {
       event: EventType.UserAudio,
       data,
     });
-    console.log('🎵 [ASR Debug] 发送音频数据:', {
-      event: EventType.UserAudio,
-      audioDataSize: data.size,
-      pcmFrameLength: pcmFrame.length,
-      isClose: isClose,
-      timestamp: new Date().toISOString()
-    });
+    // 减少音频发送日志频率，每50次发送记录一次，或者在关闭时记录
+    if (isClose || Math.random() < 0.02) {
+      console.log('🎵 [ASR Debug] 发送音频数据:', {
+        event: EventType.UserAudio,
+        audioDataSize: data.size,
+        pcmFrameLength: pcmFrame.length,
+        isClose: isClose,
+        timestamp: new Date().toISOString()
+      });
+    }
     log('send | event:' + EventType.UserAudio + ' payload: ...');
   };
 
@@ -112,6 +115,7 @@ export const useAudioRecorder = () => {
   };
 
   const recStart = () => {
+    console.log('🎙️ [ASR Debug] ===== 开始录音，准备发送语音数据 =====');
     if (recorderRef.current) {
       recorderRef.current.close();
     }
@@ -162,12 +166,16 @@ export const useAudioRecorder = () => {
   };
 
   const recStop = () => {
+    console.log('🛑 [ASR Debug] ===== 停止录音，等待ASR识别结果 =====');
     if (!recorderRef.current) {
       return;
     }
     setUserSpeaking(false);
     recorderRef.current.close();
     handleProcess([], 0, true);
+    
+    // 调用回调，通知录音已停止
+    onRecordStop?.();
   };
 
   return {

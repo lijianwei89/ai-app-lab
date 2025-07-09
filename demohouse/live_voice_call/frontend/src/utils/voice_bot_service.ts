@@ -82,6 +82,18 @@ export default class VoiceBotService {
           payload: resp.payload
         });
         
+        // 特别关注ASR相关的响应
+        if (resp.messageType === CONST.SERVER_FULL_RESPONSE) {
+          const jsonPayload = resp.payload as JSONResponse;
+          if (jsonPayload.event === 'SentenceRecognized') {
+            console.log('🎯🎯🎯 [ASR 重要] 收到语音识别响应！', {
+              event: jsonPayload.event,
+              payload: jsonPayload.payload,
+              timestamp: new Date().toISOString()
+            });
+          }
+        }
+        
         if (resp.messageType === CONST.SERVER_FULL_RESPONSE) {
           console.log('🎯 [ASR Debug] 处理JSON响应:', resp.payload);
           this.handleJSONMessage(resp.payload as JSONResponse);

@@ -30,7 +30,23 @@ export const useVoiceBotService = (llmParameters?: any) => {
     serviceRef,
     configNeedUpdateRef,
   } = useContext(AudioChatServiceContext);
-  const { recStart, recStop } = useAudioRecorder();
+  
+  // ASR响应超时检测
+  let asrTimeoutId: NodeJS.Timeout | null = null;
+  const startAsrTimeout = () => {
+    if (asrTimeoutId) clearTimeout(asrTimeoutId);
+    asrTimeoutId = setTimeout(() => {
+      console.warn('⚠️⚠️⚠️ [ASR 超时] 录音结束后超过10秒未收到语音识别响应，可能存在问题');
+    }, 10000);
+  };
+  
+  const clearAsrTimeout = () => {
+    if (asrTimeoutId) {
+      clearTimeout(asrTimeoutId);
+      asrTimeoutId = null;
+    }
+  };
+  const { recStart, recStop } = useAudioRecorder(startAsrTimeout);
   const { currentSpeaker } = useSpeakerConfig();
   const currentSpeakerRef = useSyncRef(currentSpeaker);
 
@@ -125,7 +141,8 @@ export const useVoiceBotService = (llmParameters?: any) => {
             wsReadyRef.current = true;
             break;
           case EventType.SentenceRecognized:
-            console.log('🎤 [ASR Debug] 语音识别结果:', {
+            clearAsrTimeout(); // 收到ASR响应，清除超时警告
+            console.log('🎤🎤🎤 [ASR 成功] 语音识别结果:', {
               rawPayload: payload,
               sentence: payload?.sentence,
               confidence: payload?.confidence,
@@ -135,7 +152,10 @@ export const useVoiceBotService = (llmParameters?: any) => {
             });
             recStop();
             const content = payload?.sentence || '';
-            console.log('📝 [ASR Debug] 提取的文本内容:', content);
+            console.log('📝📝📝 [ASR 成功] 提取的文本内容:', content);
+            if (!content || content.trim() === '') {
+              console.warn('⚠️ [ASR 警告] 识别结果为空，可能是静音或识别失败');
+            }
             setCurrentUserSentence(content);
             setChatMessages(prev => [
               ...prev,
