@@ -112,7 +112,17 @@ def convert_binary_to_web_event_to_binary(data: bytes) -> WebEvent:
     req = parse_request(data)
     # If the parsing result is a dictionary, convert it to a WebEvent object
     if isinstance(req, dict):
-        return WebEvent.parse_obj(req)
+        event_data = WebEvent.parse_obj(req)
+        
+        # Handle LLMParameters event by converting payload to proper type
+        if event_data.event == LLM_PARAMETERS and event_data.payload:
+            payload_dict = event_data.payload if isinstance(event_data.payload, dict) else event_data.payload.__dict__
+            event_data.payload = LLMParametersPayload(**payload_dict)
+        elif event_data.event == BOT_UPDATE_CONFIG and event_data.payload:
+            payload_dict = event_data.payload if isinstance(event_data.payload, dict) else event_data.payload.__dict__
+            event_data.payload = BotUpdateConfigPayload(**payload_dict)
+            
+        return event_data
     # Otherwise, create a new WebEvent object containing the audio data
     else:
         return WebEvent(event=USER_AUDIO, data=req)

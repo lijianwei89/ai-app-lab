@@ -22,7 +22,7 @@ import { useMessageList } from '@/components/AudioChatProvider/hooks/useMessageL
 import { useSyncRef } from '@/hooks/useSyncRef';
 import { useWsUrl } from '@/components/AudioChatServiceProvider/hooks/useWsUrl';
 
-export const useVoiceBotService = () => {
+export const useVoiceBotService = (llmParameters?: any) => {
   const {
     wsReadyRef,
     setCurrentUserSentence,
@@ -71,6 +71,16 @@ export const useVoiceBotService = () => {
         .then(() => {
           setWsConnected(true);
           log('connect success');
+          
+          // Send LLM parameters if provided
+          if (llmParameters) {
+            serviceRef.current?.sendMessage({
+              event: EventType.LLMParameters,
+              payload: llmParameters,
+            });
+            log('send | event:' + EventType.LLMParameters + ' payload: ' + JSON.stringify(llmParameters));
+          }
+          
           recStart();
         })
         .catch(e => {

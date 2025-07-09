@@ -53,6 +53,9 @@ class VoiceBotService(BaseModel):
     asr_no_input_duration: int = 0  # Cumulated no live_voice_call recognition duration
     asr_last_duration: int = 0  # Last asr recognition duration
 
+    # LLM parameters
+    llm_parameters: dict = {}  # Store LLM parameters
+
     class Config:
         """Configuration for this pydantic object."""
 
@@ -115,6 +118,11 @@ class VoiceBotService(BaseModel):
                     input_event.payload, BotUpdateConfigPayload
                 ):
                     self.tts_speaker = input_event.payload.speaker
+                elif input_event.event == LLM_PARAMETERS and isinstance(
+                    input_event.payload, LLMParametersPayload
+                ):
+                    self.llm_parameters = input_event.payload.dict()
+                    INFO(f"Updated LLM parameters: {self.llm_parameters}")
                 elif input_event.event == USER_AUDIO and input_event.data:
                     yield input_event.data
 

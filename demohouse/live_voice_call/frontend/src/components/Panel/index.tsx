@@ -14,6 +14,7 @@ import {
   Descriptions,
   Input,
   Typography,
+  Grid,
 } from '@arco-design/web-react';
 
 import { useAudioChatState } from '@/components/AudioChatProvider/hooks/useAudioChatState';
@@ -36,7 +37,7 @@ export const Panel = () => {
     botAudioPlaying,
   } = useAudioChatState();
 
-  const { handleConnect } = useVoiceBotService();
+  const { handleConnect } = useVoiceBotService(llmParameters);
   const { currentBotSentence, currentUserSentence } = useCurrentSentence();
 
 
@@ -46,6 +47,15 @@ export const Panel = () => {
 
   const { wsUrl, setWsUrl } = useWsUrl();
   const [draftWsUrl, setDraftWsUrl] = useState(wsUrl);
+
+  const [llmParameters, setLlmParameters] = useState({
+    question: '',
+    answer: '',
+    user_responds: '',
+    question_stem: '',
+    student_name: '',
+    question_category: '',
+  });
 
   return (
     <div className={'flex flex-col gap-4'}>
@@ -79,6 +89,76 @@ export const Panel = () => {
             { label: '正在播放语音', value: botAudioPlaying ? '是' : '否' },
           ]}
         />
+        
+        <div className={'border border-gray-300 rounded p-4'}>
+          <h3 className={'text-lg font-semibold mb-4'}>LLM Parameters</h3>
+          <Grid.Row gutter={16}>
+            <Grid.Col span={12}>
+              <div className={'mb-3'}>
+                <label className={'block text-sm font-medium mb-1'}>Question</label>
+                <Input
+                  value={llmParameters.question}
+                  onChange={(value) => setLlmParameters(prev => ({ ...prev, question: value }))}
+                  placeholder="Enter question"
+                />
+              </div>
+            </Grid.Col>
+            <Grid.Col span={12}>
+              <div className={'mb-3'}>
+                <label className={'block text-sm font-medium mb-1'}>Answer</label>
+                <Input
+                  value={llmParameters.answer}
+                  onChange={(value) => setLlmParameters(prev => ({ ...prev, answer: value }))}
+                  placeholder="Enter answer"
+                />
+              </div>
+            </Grid.Col>
+          </Grid.Row>
+          <Grid.Row gutter={16}>
+            <Grid.Col span={12}>
+              <div className={'mb-3'}>
+                <label className={'block text-sm font-medium mb-1'}>User Responds</label>
+                <Input
+                  value={llmParameters.user_responds}
+                  onChange={(value) => setLlmParameters(prev => ({ ...prev, user_responds: value }))}
+                  placeholder="Enter user responds"
+                />
+              </div>
+            </Grid.Col>
+            <Grid.Col span={12}>
+              <div className={'mb-3'}>
+                <label className={'block text-sm font-medium mb-1'}>Question Stem</label>
+                <Input
+                  value={llmParameters.question_stem}
+                  onChange={(value) => setLlmParameters(prev => ({ ...prev, question_stem: value }))}
+                  placeholder="Enter question stem"
+                />
+              </div>
+            </Grid.Col>
+          </Grid.Row>
+          <Grid.Row gutter={16}>
+            <Grid.Col span={12}>
+              <div className={'mb-3'}>
+                <label className={'block text-sm font-medium mb-1'}>Student Name</label>
+                <Input
+                  value={llmParameters.student_name}
+                  onChange={(value) => setLlmParameters(prev => ({ ...prev, student_name: value }))}
+                  placeholder="Enter student name"
+                />
+              </div>
+            </Grid.Col>
+            <Grid.Col span={12}>
+              <div className={'mb-3'}>
+                <label className={'block text-sm font-medium mb-1'}>Question Category</label>
+                <Input
+                  value={llmParameters.question_category}
+                  onChange={(value) => setLlmParameters(prev => ({ ...prev, question_category: value }))}
+                  placeholder="Enter question category"
+                />
+              </div>
+            </Grid.Col>
+          </Grid.Row>
+        </div>
         <Descriptions
           column={1}
           border

@@ -24,6 +24,7 @@ TTS_SENTENCE_END = "TTSSentenceEnd"
 TTS_DONE = "TTSDone"
 BOT_ERROR = "BotError"
 CONNECTION_CLOSED = "ConnectionClosed"
+LLM_PARAMETERS = "LLMParameters"
 
 
 class WebPayload(ABC):
@@ -69,6 +70,27 @@ class BotUpdateConfigPayload(WebPayload, BaseModel):
     """
 
     speaker: Optional[str] = None
+
+
+class LLMParametersPayload(WebPayload, BaseModel):
+    """
+    Payload for the LLMParameters event.
+
+    Attributes:
+        question (Optional[str]): The question parameter.
+        answer (Optional[str]): The answer parameter.
+        user_responds (Optional[str]): The user responds parameter.
+        question_stem (Optional[str]): The question stem parameter.
+        student_name (Optional[str]): The student name parameter.
+        question_category (Optional[str]): The question category parameter.
+    """
+
+    question: Optional[str] = None
+    answer: Optional[str] = None
+    user_responds: Optional[str] = None
+    question_stem: Optional[str] = None
+    student_name: Optional[str] = None
+    question_category: Optional[str] = None
 
 
 class SentenceRecognizedPayload(WebPayload, BaseModel):
@@ -161,6 +183,8 @@ class WebEvent(BaseModel):
             return cls(event=BOT_READY, payload=payload)
         elif isinstance(payload, BotUpdateConfigPayload):
             return cls(event=BOT_UPDATE_CONFIG, payload=payload)
+        elif isinstance(payload, LLMParametersPayload):
+            return cls(event=LLM_PARAMETERS, payload=payload)
         elif isinstance(payload, SentenceRecognizedPayload):
             return cls(event=SENTENCE_RECOGNIZED, payload=payload)
         elif isinstance(payload, TTSSentenceStartPayload):
