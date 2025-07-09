@@ -37,6 +37,7 @@ export const useVoiceBotService = (llmParameters?: any) => {
     if (asrTimeoutId) clearTimeout(asrTimeoutId);
     asrTimeoutId = setTimeout(() => {
       console.warn('⚠️⚠️⚠️ [ASR 超时] 录音结束后超过10秒未收到语音识别响应，可能存在问题');
+      log('⚠️ [ASR] 超时 - 10秒未收到识别响应');
     }, 10000);
   };
   
@@ -87,6 +88,7 @@ export const useVoiceBotService = (llmParameters?: any) => {
         .then(() => {
           setWsConnected(true);
           log('connect success');
+          log('🔗 [ASR] WebSocket连接成功');
           
           // Send LLM parameters if provided
           if (llmParameters) {
@@ -101,6 +103,7 @@ export const useVoiceBotService = (llmParameters?: any) => {
         })
         .catch(e => {
           log('connect failed');
+          log('❌ [ASR] WebSocket连接失败');
           Message.error('连接失败');
           setWsConnected(false);
         });
@@ -135,6 +138,13 @@ export const useVoiceBotService = (llmParameters?: any) => {
           timestamp: new Date().toISOString()
         });
         
+        // 将重要事件也记录到页面日志
+        if (event === 'SentenceRecognized') {
+          log('🎤 [ASR] 收到语音识别响应');
+        } else if (event === 'BotReady') {
+          log('✅ [ASR] Bot已准备就绪');
+        }
+        
         switch (event) {
           case EventType.BotReady:
             console.log('✅ [ASR Debug] Bot已准备就绪');
@@ -153,9 +163,15 @@ export const useVoiceBotService = (llmParameters?: any) => {
             recStop();
             const content = payload?.sentence || '';
             console.log('📝📝📝 [ASR 成功] 提取的文本内容:', content);
+            
+            // 将识别结果也记录到页面日志
             if (!content || content.trim() === '') {
               console.warn('⚠️ [ASR 警告] 识别结果为空，可能是静音或识别失败');
+              log('⚠️ [ASR] 识别结果为空');
+            } else {
+              log(`📝 [ASR] 识别成功: "${content}"`);
             }
+            
             setCurrentUserSentence(content);
             setChatMessages(prev => [
               ...prev,

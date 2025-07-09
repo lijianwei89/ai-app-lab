@@ -116,6 +116,7 @@ export const useAudioRecorder = (onRecordStop?: () => void) => {
 
   const recStart = () => {
     console.log('🎙️ [ASR Debug] ===== 开始录音，准备发送语音数据 =====');
+    log('🎙️ [ASR] 开始录音');
     if (recorderRef.current) {
       recorderRef.current.close();
     }
@@ -167,6 +168,7 @@ export const useAudioRecorder = (onRecordStop?: () => void) => {
 
   const recStop = () => {
     console.log('🛑 [ASR Debug] ===== 停止录音，等待ASR识别结果 =====');
+    log('🛑 [ASR] 停止录音，等待识别结果');
     if (!recorderRef.current) {
       return;
     }
