@@ -14,6 +14,15 @@ export interface IMessage {
   content: string;
 }
 
+export interface IUserParameters {
+  question: string;
+  answer: string;
+  user_responds: string;
+  question_stem: string;
+  student_name: string;
+  question_category: string;
+}
+
 export type WebResponse = {
   event: string;
   payload?: Record<string, any>;
@@ -37,6 +46,7 @@ export enum EventType {
   BotError = 'BotError',
   BotUpdateConfig = 'BotUpdateConfig',
   UserAudio = 'UserAudio',
+  UserParameters = 'UserParameters',
 }
 export interface IWebSocketResponse {
   messageType: number;

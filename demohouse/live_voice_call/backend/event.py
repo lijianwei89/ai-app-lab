@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 BOT_READY = "BotReady"
 BOT_UPDATE_CONFIG = "BotUpdateConfig"
 USER_AUDIO = "UserAudio"
+USER_PARAMETERS = "UserParameters"
 SENTENCE_RECOGNIZED = "SentenceRecognized"
 TTS_SENTENCE_START = "TTSSentenceStart"
 TTS_SENTENCE_END = "TTSSentenceEnd"
@@ -69,6 +70,27 @@ class BotUpdateConfigPayload(WebPayload, BaseModel):
     """
 
     speaker: Optional[str] = None
+
+
+class UserParametersPayload(WebPayload, BaseModel):
+    """
+    Payload for the UserParameters event.
+
+    Attributes:
+        question (str): The question text.
+        answer (str): The answer text.
+        user_responds (str): The ASR recognition result.
+        question_stem (str): The question stem.
+        student_name (str): The student's name.
+        question_category (str): The question category.
+    """
+
+    question: str
+    answer: str
+    user_responds: str
+    question_stem: str
+    student_name: str
+    question_category: str
 
 
 class SentenceRecognizedPayload(WebPayload, BaseModel):
@@ -161,6 +183,8 @@ class WebEvent(BaseModel):
             return cls(event=BOT_READY, payload=payload)
         elif isinstance(payload, BotUpdateConfigPayload):
             return cls(event=BOT_UPDATE_CONFIG, payload=payload)
+        elif isinstance(payload, UserParametersPayload):
+            return cls(event=USER_PARAMETERS, payload=payload)
         elif isinstance(payload, SentenceRecognizedPayload):
             return cls(event=SENTENCE_RECOGNIZED, payload=payload)
         elif isinstance(payload, TTSSentenceStartPayload):

@@ -24,6 +24,7 @@ import { useVoiceBotService } from '@/components/AudioChatServiceProvider/hooks/
 import { useCurrentSentence } from '@/components/AudioChatServiceProvider/hooks/useCurrentSentence';
 import { useWsUrl } from '@/components/AudioChatServiceProvider/hooks/useWsUrl';
 import { useState } from 'react';
+import { IUserParameters } from '@/types';
 
 export const Panel = () => {
   const {
@@ -36,7 +37,7 @@ export const Panel = () => {
     botAudioPlaying,
   } = useAudioChatState();
 
-  const { handleConnect } = useVoiceBotService();
+  const { handleConnect } = useVoiceBotService(userParameters);
   const { currentBotSentence, currentUserSentence } = useCurrentSentence();
 
 
@@ -46,6 +47,15 @@ export const Panel = () => {
 
   const { wsUrl, setWsUrl } = useWsUrl();
   const [draftWsUrl, setDraftWsUrl] = useState(wsUrl);
+  
+  const [userParameters, setUserParameters] = useState<IUserParameters>({
+    question: '',
+    answer: '',
+    user_responds: '',
+    question_stem: '',
+    student_name: '',
+    question_category: '',
+  });
 
   return (
     <div className={'flex flex-col gap-4'}>
@@ -106,6 +116,36 @@ export const Panel = () => {
             },
           ]}
         />
+        <div className="flex flex-col gap-2">
+          <div className="font-semibold">用户参数设置</div>
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              placeholder="question"
+              value={userParameters.question}
+              onChange={(value) => setUserParameters(prev => ({ ...prev, question: value }))}
+            />
+            <Input
+              placeholder="answer"
+              value={userParameters.answer}
+              onChange={(value) => setUserParameters(prev => ({ ...prev, answer: value }))}
+            />
+            <Input
+              placeholder="question_stem"
+              value={userParameters.question_stem}
+              onChange={(value) => setUserParameters(prev => ({ ...prev, question_stem: value }))}
+            />
+            <Input
+              placeholder="student_name"
+              value={userParameters.student_name}
+              onChange={(value) => setUserParameters(prev => ({ ...prev, student_name: value }))}
+            />
+            <Input
+              placeholder="question_category"
+              value={userParameters.question_category}
+              onChange={(value) => setUserParameters(prev => ({ ...prev, question_category: value }))}
+            />
+          </div>
+        </div>
         <Input.TextArea
           id={'log'}
           readOnly

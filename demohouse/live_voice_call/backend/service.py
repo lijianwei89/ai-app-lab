@@ -53,6 +53,14 @@ class VoiceBotService(BaseModel):
     asr_no_input_duration: int = 0  # Cumulated no live_voice_call recognition duration
     asr_last_duration: int = 0  # Last asr recognition duration
 
+    # Store user parameters
+    current_question: str = ""
+    current_answer: str = ""
+    current_user_responds: str = ""
+    current_question_stem: str = ""
+    current_student_name: str = ""
+    current_question_category: str = ""
+
     class Config:
         """Configuration for this pydantic object."""
 
@@ -115,6 +123,20 @@ class VoiceBotService(BaseModel):
                     input_event.payload, BotUpdateConfigPayload
                 ):
                     self.tts_speaker = input_event.payload.speaker
+                elif input_event.event == USER_PARAMETERS and isinstance(
+                    input_event.payload, UserParametersPayload
+                ):
+                    # Store the six parameters
+                    self.current_question = input_event.payload.question
+                    self.current_answer = input_event.payload.answer
+                    self.current_user_responds = input_event.payload.user_responds
+                    self.current_question_stem = input_event.payload.question_stem
+                    self.current_student_name = input_event.payload.student_name
+                    self.current_question_category = input_event.payload.question_category
+                    INFO(f"Received user parameters: question={self.current_question}, "
+                         f"answer={self.current_answer}, user_responds={self.current_user_responds}, "
+                         f"question_stem={self.current_question_stem}, student_name={self.current_student_name}, "
+                         f"question_category={self.current_question_category}")
                 elif input_event.event == USER_AUDIO and input_event.data:
                     yield input_event.data
 
@@ -129,6 +151,8 @@ class VoiceBotService(BaseModel):
         async for response in asr_responses:
             if self.state == StateIdle:
                 if self.asr_buffer and self.asr_no_input_duration > ASRInterval:
+                    # Update user_responds with ASR result
+                    self.current_user_responds = self.asr_buffer
                     yield SentenceRecognizedPayload(sentence=self.asr_buffer)
                     self.asr_buffer = ""
                     self.asr_no_input_duration = 0

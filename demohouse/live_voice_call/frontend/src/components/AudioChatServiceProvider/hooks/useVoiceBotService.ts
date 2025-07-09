@@ -16,13 +16,13 @@ import { useAudioChatState } from '@/components/AudioChatProvider/hooks/useAudio
 import { useLogContent } from '@/components/AudioChatServiceProvider/hooks/useLogContent';
 import { useAudioRecorder } from '@/components/AudioChatServiceProvider/hooks/useAudioRecorder';
 import VoiceBotService from '@/utils/voice_bot_service';
-import { EventType } from '@/types';
+import { EventType, IUserParameters } from '@/types';
 import { useSpeakerConfig } from '@/components/AudioChatServiceProvider/hooks/useSpeakerConfig';
 import { useMessageList } from '@/components/AudioChatProvider/hooks/useMessageList';
 import { useSyncRef } from '@/hooks/useSyncRef';
 import { useWsUrl } from '@/components/AudioChatServiceProvider/hooks/useWsUrl';
 
-export const useVoiceBotService = () => {
+export const useVoiceBotService = (userParameters: IUserParameters) => {
   const {
     wsReadyRef,
     setCurrentUserSentence,
@@ -112,6 +112,21 @@ export const useVoiceBotService = () => {
               { role: 'user', content },
               { role: 'bot', content: '' },
             ]);
+            
+            // Send user parameters with ASR result
+            if (serviceRef.current) {
+              serviceRef.current.sendMessage({
+                event: EventType.UserParameters,
+                payload: {
+                  ...userParameters,
+                  user_responds: content,
+                },
+              });
+              log('send | event:' + EventType.UserParameters + ' payload: ' + JSON.stringify({
+                ...userParameters,
+                user_responds: content,
+              }));
+            }
             break;
           case EventType.TTSSentenceStart:
             setCurrentBotSentence(prevSentence => {
