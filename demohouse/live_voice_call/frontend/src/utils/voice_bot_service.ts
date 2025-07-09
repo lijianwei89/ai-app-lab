@@ -39,12 +39,15 @@ export default class VoiceBotService {
   }
   public async connect(): Promise<WebSocket> {
     return new Promise((resolve, reject) => {
+      console.log('🔗 [ASR Debug] 开始连接WebSocket:', this.ws_url);
       const ws = new WebSocket(this.ws_url);
       ws.onopen = () => {
+        console.log('✅ [ASR Debug] WebSocket连接成功');
         this.ws = ws;
         resolve(ws);
       };
       ws.onerror = e => {
+        console.error('❌ [ASR Debug] WebSocket连接错误:', e);
         reject(e);
         this.onError(e);
       };
@@ -55,6 +58,14 @@ export default class VoiceBotService {
   // 发送消息
   public sendMessage(message: WebRequest) {
     const data = pack(message);
+    console.log('📤 [ASR Debug] 发送WebSocket消息:', {
+      event: message.event,
+      payloadKeys: message.payload ? Object.keys(message.payload) : [],
+      hasData: !!message.data,
+      dataSize: message.data ? message.data.size : 0,
+      packedDataSize: data.size,
+      timestamp: new Date().toISOString()
+    });
     this.ws?.send(data);
   }
 
@@ -63,15 +74,28 @@ export default class VoiceBotService {
     try {
       e.data.arrayBuffer().then((buffer: ArrayBuffer) => {
         const resp = decodeWebSocketResponse(buffer);
+        console.log('🔍 [ASR Debug] WebSocket消息接收:', {
+          messageType: resp.messageType,
+          SERVER_FULL_RESPONSE: CONST.SERVER_FULL_RESPONSE,
+          SERVER_AUDIO_ONLY_RESPONSE: CONST.SERVER_AUDIO_ONLY_RESPONSE,
+          payloadType: typeof resp.payload,
+          payload: resp.payload
+        });
+        
         if (resp.messageType === CONST.SERVER_FULL_RESPONSE) {
+          console.log('🎯 [ASR Debug] 处理JSON响应:', resp.payload);
           this.handleJSONMessage(resp.payload as JSONResponse);
         }
         if (resp.messageType === CONST.SERVER_AUDIO_ONLY_RESPONSE) {
+          console.log('🎵 [ASR Debug] 处理音频响应:', {
+            audioDataSize: (resp.payload as ArrayBuffer).byteLength
+          });
           this.handleAudioOnlyResponse(resp.payload as ArrayBuffer);
         }
         // handleMessage?.(json);
       });
     } catch (e) {
+      console.error('❌ [ASR Debug] WebSocket消息处理错误:', e);
       this.onError(e);
     }
   }

@@ -51,6 +51,13 @@ export const useAudioRecorder = () => {
       event: EventType.UserAudio,
       data,
     });
+    console.log('🎵 [ASR Debug] 发送音频数据:', {
+      event: EventType.UserAudio,
+      audioDataSize: data.size,
+      pcmFrameLength: pcmFrame.length,
+      isClose: isClose,
+      timestamp: new Date().toISOString()
+    });
     log('send | event:' + EventType.UserAudio + ' payload: ...');
   };
 

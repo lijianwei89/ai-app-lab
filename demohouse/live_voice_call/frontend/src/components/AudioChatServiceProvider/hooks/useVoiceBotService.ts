@@ -109,13 +109,33 @@ export const useVoiceBotService = (llmParameters?: any) => {
       handleJSONMessage: msg => {
         const { event, payload } = msg;
         log('receive | event:' + event + ' payload:' + JSON.stringify(payload));
+        
+        // 添加详细的ASR调试日志
+        console.log('🔍 [ASR Debug] 处理JSON消息:', {
+          event: event,
+          payload: payload,
+          eventType: typeof event,
+          payloadType: typeof payload,
+          timestamp: new Date().toISOString()
+        });
+        
         switch (event) {
           case EventType.BotReady:
+            console.log('✅ [ASR Debug] Bot已准备就绪');
             wsReadyRef.current = true;
             break;
           case EventType.SentenceRecognized:
+            console.log('🎤 [ASR Debug] 语音识别结果:', {
+              rawPayload: payload,
+              sentence: payload?.sentence,
+              confidence: payload?.confidence,
+              startTime: payload?.start_time,
+              endTime: payload?.end_time,
+              allFields: Object.keys(payload || {})
+            });
             recStop();
             const content = payload?.sentence || '';
+            console.log('📝 [ASR Debug] 提取的文本内容:', content);
             setCurrentUserSentence(content);
             setChatMessages(prev => [
               ...prev,
