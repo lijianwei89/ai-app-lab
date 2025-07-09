@@ -10,7 +10,7 @@ import aiohttp
 import time
 
 
-async def test_dify_direct(api_key: str, test_inputs: dict = None):
+async def test_dify_direct(api_key: str = "app-JqtJdpgiEKukUAxxT8oiJR4u", test_inputs: dict = None):
     """
     直接测试 Dify API，无需配置文件
     """
