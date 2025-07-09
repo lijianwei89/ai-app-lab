@@ -71,6 +71,7 @@ async def test_dify_direct(api_key: str, test_inputs: dict = None):
                 
                 chunk_count = 0
                 total_response = ""
+                final_result = ""  # 保存最终的 result 内容
                 
                 all_raw_responses = []  # 保存所有原始响应
                 
@@ -107,15 +108,22 @@ async def test_dify_direct(api_key: str, test_inputs: dict = None):
                             elif event_type == 'workflow_finished':
                                 print("-" * 30)
                                 print("🏁 工作流完成")
+                                
+                                # 提取最终的 result 内容
+                                outputs = data.get('data', {}).get('outputs', {})
+                                final_result = outputs.get('result', '')
+                                print(f"🎯 最终结果(用于TTS): {final_result}")
                                 break
                                 
                             elif event_type == 'node_started':
                                 node_id = data.get('data', {}).get('id', 'unknown')
-                                print(f"🔧 节点开始: {node_id}")
+                                node_type = data.get('data', {}).get('node_type', 'unknown')
+                                print(f"🔧 节点开始: {node_type} ({node_id})")
                                 
                             elif event_type == 'node_finished':
                                 node_id = data.get('data', {}).get('id', 'unknown')
-                                print(f"✅ 节点完成: {node_id}")
+                                node_type = data.get('data', {}).get('node_type', 'unknown')
+                                print(f"✅ 节点完成: {node_type} ({node_id})")
                                 
                             elif event_type == 'error':
                                 error_msg = data.get('data', {}).get('message', '未知错误')
@@ -134,15 +142,17 @@ async def test_dify_direct(api_key: str, test_inputs: dict = None):
                 print(f"\n📊 测试结果:")
                 print(f"   ✅ 测试成功")
                 print(f"   ⏱️  执行时间: {execution_time:.2f} 秒")
-                print(f"   📊 数据块数量: {chunk_count}")
-                print(f"   📝 完整响应: {total_response}")
+                print(f"   📊 流式文本块数量: {chunk_count}")
+                print(f"   📝 流式文本内容: {total_response}")
+                print(f"   🎯 最终结果内容(TTS用): {final_result}")
                 
                 # 保存结果
                 result = {
                     "success": True,
                     "execution_time": execution_time,
                     "chunk_count": chunk_count,
-                    "total_response": total_response,
+                    "total_response": total_response,  # 流式文本内容
+                    "final_result": final_result,      # 最终结果内容（用于TTS）
                     "test_inputs": test_inputs,
                     "all_raw_responses": all_raw_responses,  # 包含所有原始响应
                     "response_headers": dict(response.headers),
@@ -160,7 +170,14 @@ async def test_dify_direct(api_key: str, test_inputs: dict = None):
                 print(f"   📊 总响应行数: {len(all_raw_responses)}")
                 print(f"   🔗 HTTP状态: {response.status}")
                 print(f"   📦 响应头数量: {len(response.headers)}")
-                print(f"   📝 文本块数量: {chunk_count}")
+                print(f"   📝 流式文本块数量: {chunk_count}")
+                print(f"   🎯 最终结果长度: {len(final_result)} 字符")
+                
+                # 验证结果
+                if final_result:
+                    print(f"   ✅ 成功获取最终结果，将用于TTS")
+                else:
+                    print(f"   ⚠️  未获取到最终结果")
                 
                 return True
                 

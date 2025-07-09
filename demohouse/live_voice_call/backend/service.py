@@ -251,13 +251,22 @@ class VoiceBotService(BaseModel):
         
         completion_buffer = ""
         try:
-            async for chunk in self.dify_client.stream_workflow(
+            # Get final result from Dify workflow
+            result = await self.dify_client.stream_workflow(
                 inputs=inputs,
                 user_id=user_id
-            ):
-                if chunk:
+            )
+            
+            if result:
+                # Return the complete result as single chunk for TTS
+                yield result
+                completion_buffer = result
+            else:
+                # If no result, fallback to ARK LLM
+                async for chunk in self.stream_llm_chat(text):
                     yield chunk
-                    completion_buffer += chunk
+                return
+                
         except Exception as e:
             INFO(f"Dify API error: {str(e)}")
             # Fallback to ARK LLM if Dify fails

@@ -55,17 +55,17 @@ class DifyClient:
         inputs: Dict[str, Any],
         user_id: str = None,
         files: Optional[list] = None
-    ) -> AsyncIterable[str]:
+    ) -> str:
         """
-        Execute a Dify workflow with streaming response.
+        Execute a Dify workflow and return the final result.
         
         Args:
             inputs (Dict[str, Any]): Input parameters for the workflow
             user_id (str, optional): User identifier. Defaults to generated UUID.
             files (list, optional): File inputs for the workflow
             
-        Yields:
-            str: Streaming text content from the workflow execution
+        Returns:
+            str: Final result content from workflow execution
         """
         if user_id is None:
             user_id = str(uuid.uuid4())
@@ -97,7 +97,7 @@ class DifyClient:
                 
                 INFO("Dify API streaming response started")
                 
-                # Process streaming response
+                # Process streaming response and wait for final result
                 async for line in response.content:
                     line = line.decode('utf-8').strip()
                     
@@ -112,15 +112,13 @@ class DifyClient:
                             # Handle different event types
                             event_type = data.get('event', '')
                             
-                            if event_type == 'text_chunk':
-                                # Extract text content from streaming chunk
-                                text = data.get('data', {}).get('text', '')
-                                if text:
-                                    yield text
-                                    
-                            elif event_type == 'workflow_finished':
+                            if event_type == 'workflow_finished':
                                 INFO("Dify workflow finished")
-                                break
+                                # Extract result from workflow outputs
+                                outputs = data.get('data', {}).get('outputs', {})
+                                result = outputs.get('result', '')
+                                INFO(f"Dify workflow result: {result}")
+                                return result
                                 
                             elif event_type == 'error':
                                 error_msg = data.get('data', {}).get('message', 'Unknown error')
@@ -129,6 +127,9 @@ class DifyClient:
                         except json.JSONDecodeError:
                             # Skip invalid JSON lines
                             continue
+                
+                # If we reach here, workflow didn't finish properly
+                raise Exception("Dify workflow did not complete successfully")
                             
         except Exception as e:
             logging.error(f"Dify API error: {str(e)}")
