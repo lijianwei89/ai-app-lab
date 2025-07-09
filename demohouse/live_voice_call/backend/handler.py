@@ -29,6 +29,9 @@ TTS_ACCESS_TOKEN = "{YOUR_TTS_ACCESS_TOKEN}"
 TTS_APP_ID = "{YOUR_TTS_APP_ID}"
 # replace with your ark endpoint
 LLM_ENDPOINT_ID = "{YOUR_ARK_LLM_ENDPOINT_ID}"
+# replace with your dify API access
+DIFY_API_KEY = "{YOUR_DIFY_API_KEY}"
+DIFY_BASE_URL = "https://api.dify.ai"
 
 # Configure logging
 logging.basicConfig(
@@ -51,6 +54,8 @@ async def handler(websocket: websockets.WebSocketCommonProtocol, path):
         tts_access_key=TTS_ACCESS_TOKEN,
         asr_app_key=ASR_APP_ID,
         asr_access_key=ASR_ACCESS_TOKEN,
+        dify_api_key=DIFY_API_KEY,
+        dify_base_url=DIFY_BASE_URL,
     )
     await service.init()
     # Send a bot ready message

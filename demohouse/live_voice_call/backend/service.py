@@ -9,8 +9,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License. 
 
-from typing import AsyncIterable, List, Union
+from typing import AsyncIterable, List, Union, Optional
 
+from pydantic import BaseModel
 from arkitect.core.component.asr import ASRFullServerResponse, AsyncASRClient
 from arkitect.core.component.llm import BaseChatLanguageModel
 from arkitect.core.component.llm.model import ArkMessage
@@ -23,6 +24,7 @@ from arkitect.core.component.tts.constants import (
 from arkitect.telemetry.logger import INFO
 from event import *
 from prompt import VoiceBotPrompt
+from dify_client import DifyClient
 
 StateInProgress = "InProgress"
 StateIdle = "Idle"
@@ -35,6 +37,7 @@ DEFAULT_SPEAKER = "zh_female_sajiaonvyou_moon_bigtts"
 class VoiceBotService(BaseModel):
     asr_client: Optional[AsyncASRClient] = None
     tts_client: Optional[AsyncTTSClient] = None
+    dify_client: Optional[DifyClient] = None
     llm_ep_id: str
     state: str = StateIdle
     tts_speaker: str = DEFAULT_SPEAKER  # TTS live_voice_call
@@ -46,8 +49,11 @@ class VoiceBotService(BaseModel):
     asr_access_key: str
     tts_app_key: str
     tts_access_key: str
+    dify_api_key: str
+    dify_base_url: str
 
     history_messages: List[ArkMessage] = []  # Store historical dialogue information
+    conversation_history: List[dict] = []  # Store conversation history for Dify
 
     asr_buffer: str = ""  # Reservoir asr recognition result
     asr_no_input_duration: int = 0  # Cumulated no live_voice_call recognition duration
@@ -63,7 +69,7 @@ class VoiceBotService(BaseModel):
 
     async def init(self):
         """
-        Initialize the TTS and ASR clients.
+        Initialize the TTS, ASR, and Dify clients.
         """
         self.tts_client = AsyncTTSClient(
             app_key=self.tts_app_key,
@@ -74,6 +80,10 @@ class VoiceBotService(BaseModel):
         )
         self.asr_client = AsyncASRClient(
             app_key=self.asr_app_key, access_key=self.asr_access_key
+        )
+        self.dify_client = DifyClient(
+            api_key=self.dify_api_key,
+            base_url=self.dify_base_url
         )
         await self.asr_client.init()
         await self.tts_client.init()
@@ -89,7 +99,7 @@ class VoiceBotService(BaseModel):
             # set state into InProgress
             self.state = StateInProgress
             yield WebEvent.from_payload(asr_recognized)
-            llm_stream_rsp = self.stream_llm_chat(asr_recognized.sentence)
+            llm_stream_rsp = self.stream_dify_chat(asr_recognized.sentence)
             async for payload in self.handle_tts_response(llm_stream_rsp):
                 yield WebEvent.from_payload(payload)
             # recreate the asr and tts client
@@ -213,3 +223,68 @@ class VoiceBotService(BaseModel):
             self.history_messages.append(
                 ArkMessage(**{"role": "assistant", "content": completion_buffer})
             )
+
+    async def stream_dify_chat(self, text: str) -> AsyncIterable[str]:
+        """
+        Stream chat with Dify workflow and generate responses.
+        """
+        # Add current user message to conversation history
+        self.conversation_history.append({"role": "user", "content": text})
+        
+        # Prepare inputs for Dify workflow
+        inputs = {
+            # Core conversation parameters
+            "user_input": text,
+            "conversation_history": self.conversation_history,
+            
+            # Add LLM parameters if available
+            **self.llm_parameters,
+            
+            # Add user_responds from ASR result
+            "user_responds": text
+        }
+        
+        # Generate a user ID for the conversation
+        user_id = f"voice_chat_{id(self)}"
+        
+        INFO(f"Calling Dify with inputs: {inputs}")
+        
+        completion_buffer = ""
+        try:
+            async for chunk in self.dify_client.stream_workflow(
+                inputs=inputs,
+                user_id=user_id
+            ):
+                if chunk:
+                    yield chunk
+                    completion_buffer += chunk
+        except Exception as e:
+            INFO(f"Dify API error: {str(e)}")
+            # Fallback to ARK LLM if Dify fails
+            async for chunk in self.stream_llm_chat(text):
+                yield chunk
+            return
+        
+        # Add assistant response to conversation history
+        if completion_buffer:
+            self.conversation_history.append(
+                {"role": "assistant", "content": completion_buffer}
+            )
+            # Also add to ARK history for consistency
+            self.history_messages.append(
+                ArkMessage(**{"role": "user", "content": text})
+            )
+            self.history_messages.append(
+                ArkMessage(**{"role": "assistant", "content": completion_buffer})
+            )
+
+    async def cleanup(self):
+        """
+        Cleanup resources including Dify client.
+        """
+        if self.dify_client:
+            await self.dify_client.close()
+        if self.asr_client:
+            await self.asr_client.close()
+        if self.tts_client:
+            await self.tts_client.close()
