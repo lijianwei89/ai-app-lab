@@ -37,17 +37,6 @@ export const Panel = () => {
     botAudioPlaying,
   } = useAudioChatState();
 
-  const { handleConnect } = useVoiceBotService(userParameters);
-  const { currentBotSentence, currentUserSentence } = useCurrentSentence();
-
-
-  const { recStart, recStop } = useAudioRecorder();
-
-  const { logContent } = useLogContent();
-
-  const { wsUrl, setWsUrl } = useWsUrl();
-  const [draftWsUrl, setDraftWsUrl] = useState(wsUrl);
-  
   const [userParameters, setUserParameters] = useState<IUserParameters>({
     question: '',
     answer: '',
@@ -56,6 +45,16 @@ export const Panel = () => {
     student_name: '',
     question_category: '',
   });
+
+  const { handleConnect } = useVoiceBotService(userParameters);
+  const { currentBotSentence, currentUserSentence } = useCurrentSentence();
+
+  const { recStart, recStop } = useAudioRecorder();
+
+  const { logContent } = useLogContent();
+
+  const { wsUrl, setWsUrl } = useWsUrl();
+  const [draftWsUrl, setDraftWsUrl] = useState(wsUrl);
 
   return (
     <div className={'flex flex-col gap-4'}>
