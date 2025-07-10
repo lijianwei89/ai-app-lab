@@ -140,9 +140,11 @@ class VoiceBotService(BaseModel):
                     INFO("need recreate asr conn")
                     await self.asr_client.init()
 
-                INFO(
-                    f"receive input, event={input_event.event} payload={input_event.payload}"
-                )
+                # Only log non-audio events to reduce noise
+                if input_event.event != USER_AUDIO:
+                    INFO(
+                        f"[EVENT_RECEIVED] 📨 {input_event.event} | payload_type={type(input_event.payload).__name__}"
+                    )
                 if input_event.event == BOT_UPDATE_CONFIG and isinstance(
                     input_event.payload, BotUpdateConfigPayload
                 ):
@@ -199,9 +201,10 @@ class VoiceBotService(BaseModel):
                         self.asr_no_input_duration = (
                             response.audio.duration - self.asr_last_duration
                         )
-                    INFO(
-                        f"asr buffer incremented: {increment_len}, utterances: {response.result.utterances}"
-                    )
+                    # Only log when there's actual content change
+                    if increment_len > 0:
+                        INFO(f"[ASR] 🎤 Speech recognized: '{response.result.text}'")
+                    # Skip logging for no-change ASR responses to reduce noise
             else:
                 INFO("service is InProgress, will ignore the newer asr response")
                 continue
@@ -215,25 +218,33 @@ class VoiceBotService(BaseModel):
         Handle TTS responses and generate TTS events.
         """
         buffer = bytearray()
+        total_audio_chunks = 0
+        total_audio_bytes = 0
+        
         if not self.tts_client.inited:
-            INFO("need recreate tts client")
+            INFO("[TTS] 🔄 Recreating TTS client")
             await self.tts_client.init()
+            
         async for tts_rsp in self.tts_client.tts(
             source=llm_output, include_transcript=True
         ):
-            INFO(
-                f"receive tts response: event={tts_rsp.event} transcript={tts_rsp.transcript} \
-                audio len={len(tts_rsp.audio) if tts_rsp.audio else 0}"
-            )
+            # Only log important TTS events, not every audio chunk
             if tts_rsp.event == EventTTSSentenceStart:
+                INFO(f"[TTS] 🎤 Sentence start: '{tts_rsp.transcript}'")
                 yield TTSSentenceStartPayload(sentence=tts_rsp.transcript)
             elif tts_rsp.event == EventTTSSentenceEnd:
+                INFO(f"[TTS] ✅ Sentence end: {len(buffer)} bytes total, {total_audio_chunks} chunks")
                 yield TTSSentenceEndPayload(data=buffer)
                 buffer.clear()
+                total_audio_chunks = 0
+                total_audio_bytes = 0
             elif tts_rsp.audio:
                 buffer.extend(tts_rsp.audio)
+                total_audio_chunks += 1
+                total_audio_bytes += len(tts_rsp.audio)
 
             if tts_rsp.event == EventSessionFinished:
+                INFO(f"[TTS] 🏁 Session finished")
                 yield TTSDonePayload()
                 await self.tts_client.close()
                 break
