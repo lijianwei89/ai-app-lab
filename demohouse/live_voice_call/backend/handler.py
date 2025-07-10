@@ -18,17 +18,22 @@ import websockets
 
 from arkitect.telemetry.logger import INFO
 from arkitect.utils.event_loop import get_event_loop
-from service import VoiceBotService
+from service import VoiceBotService, LLMProvider
 from utils import *
 
 # replace with your asr API access
 ASR_ACCESS_TOKEN = "{YOUR_ASR_ACCESS_TOKEN}"
-ASR_APP_ID = "{YOUR_ASR_APP_ID}"
+ASR_APP_ID = "{YOUR_ASR_ACCESS_TOKEN}"
 # replace with your tts API access
-TTS_ACCESS_TOKEN = "{YOUR_TTS_ACCESS_TOKEN}"
+TTS_ACCESS_TOKEN = "{YOUR_ASR_ACCESS_TOKEN}"
 TTS_APP_ID = "{YOUR_TTS_APP_ID}"
 # replace with your ark endpoint
 LLM_ENDPOINT_ID = "{YOUR_ARK_LLM_ENDPOINT_ID}"
+# replace with your dify API access
+DIFY_API_KEY = "{YOUR_DIFY_API_KEY}"
+DIFY_BASE_URL = "https://api.dify.ai"
+# LLM Provider: "ark" or "dify"
+LLM_PROVIDER = "dify"
 
 # Configure logging
 logging.basicConfig(
@@ -51,6 +56,9 @@ async def handler(websocket: websockets.WebSocketCommonProtocol, path):
         tts_access_key=TTS_ACCESS_TOKEN,
         asr_app_key=ASR_APP_ID,
         asr_access_key=ASR_ACCESS_TOKEN,
+        llm_provider=LLMProvider.DIFY if LLM_PROVIDER == "dify" else LLMProvider.ARK,
+        dify_api_key=DIFY_API_KEY if LLM_PROVIDER == "dify" else None,
+        dify_base_url=DIFY_BASE_URL,
     )
     await service.init()
     # Send a bot ready message
