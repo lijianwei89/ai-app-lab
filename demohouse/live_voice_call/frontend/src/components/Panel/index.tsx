@@ -159,8 +159,8 @@ export const Panel = () => {
             // 检查是否为Dify相关日志
             const isDifyRequest = line.includes('[DIFY_REQUEST]');
             const isDifyResponse = line.includes('[DIFY_RESPONSE]');
-            const isDifySuccess = line.includes('| SUCCESS |');
-            const isDifyError = line.includes('| ERROR |');
+            const isDifySuccess = isDifyResponse && line.includes('| SUCCESS |');
+            const isDifyError = isDifyResponse && line.includes('| ERROR |');
             
             let className = 'mb-1 font-mono';
             let style = {};
@@ -168,10 +168,10 @@ export const Panel = () => {
             if (isDifyRequest) {
               className += ' bg-blue-100 text-blue-800 p-1 rounded';
               style = { borderLeft: '4px solid #3b82f6' };
-            } else if (isDifyResponse && isDifySuccess) {
+            } else if (isDifySuccess) {
               className += ' bg-green-100 text-green-800 p-1 rounded';
               style = { borderLeft: '4px solid #10b981' };
-            } else if (isDifyResponse && isDifyError) {
+            } else if (isDifyError) {
               className += ' bg-red-100 text-red-800 p-1 rounded';
               style = { borderLeft: '4px solid #ef4444' };
             } else if (line.includes('UserParameters') || line.includes('[USER_PARAMS]')) {
