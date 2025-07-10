@@ -114,14 +114,18 @@ class DifyClient:
                                                 if text:
                                                     yield text
                                         elif event_data.get('event') == 'workflow_finished':
-                                            # Extract final output if available
+                                            # Extract final output from 'result' field specifically
                                             if 'data' in event_data and 'outputs' in event_data['data']:
                                                 outputs = event_data['data']['outputs']
-                                                # Look for text output in various possible fields
-                                                for key, value in outputs.items():
-                                                    if isinstance(value, str) and value.strip():
-                                                        yield value
-                                                        break
+                                                # Prioritize 'result' field first as it contains the correct answer
+                                                if 'result' in outputs and isinstance(outputs['result'], str) and outputs['result'].strip():
+                                                    yield outputs['result']
+                                                else:
+                                                    # Fallback to other fields if 'result' is not available
+                                                    for key, value in outputs.items():
+                                                        if isinstance(value, str) and value.strip():
+                                                            yield value
+                                                            break
                                         elif event_data.get('event') == 'node_finished':
                                             # Extract node output if it contains text
                                             if 'data' in event_data and 'outputs' in event_data['data']:

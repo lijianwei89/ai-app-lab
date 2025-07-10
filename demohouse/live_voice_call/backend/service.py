@@ -286,6 +286,7 @@ class VoiceBotService(BaseModel):
         INFO(f"Sending to Dify with inputs: {inputs}")
         
         completion_buffer = ""
+        final_result = ""  # Store the final result from workflow_finished event
         
         try:
             async for chunk in self.dify_client.stream_workflow_run(
@@ -293,8 +294,19 @@ class VoiceBotService(BaseModel):
                 user_id=f"user-{self.current_student_name or 'anonymous'}"
             ):
                 if chunk:
-                    yield chunk
+                    # Check if this is the final result (from workflow_finished event)
+                    # The Dify client now prioritizes 'result' field content
+                    final_result = chunk
                     completion_buffer += chunk
+            
+            # Only yield the final result for TTS, not intermediate chunks
+            if final_result:
+                INFO(f"Using final Dify result for TTS: {final_result}")
+                yield final_result
+            else:
+                # Fallback if no final result
+                yield completion_buffer
+                    
         except Exception as e:
             INFO(f"Dify streaming error: {str(e)}")
             # Fallback to a simple response
