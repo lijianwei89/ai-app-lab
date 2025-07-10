@@ -33,6 +33,7 @@ export const useVoiceBotService = (userParameters: IUserParameters) => {
   const { recStart, recStop } = useAudioRecorder();
   const { currentSpeaker } = useSpeakerConfig();
   const currentSpeakerRef = useSyncRef(currentSpeaker);
+  const userParametersRef = useSyncRef(userParameters);
 
   const { setChatMessages } = useMessageList();
   const { setWsConnected, setBotSpeaking, setBotAudioPlaying } =
@@ -118,12 +119,12 @@ export const useVoiceBotService = (userParameters: IUserParameters) => {
               serviceRef.current.sendMessage({
                 event: EventType.UserParameters,
                 payload: {
-                  ...userParameters,
+                  ...userParametersRef.current,
                   user_responds: content,
                 },
               });
               log('send | event:' + EventType.UserParameters + ' payload: ' + JSON.stringify({
-                ...userParameters,
+                ...userParametersRef.current,
                 user_responds: content,
               }));
             }
