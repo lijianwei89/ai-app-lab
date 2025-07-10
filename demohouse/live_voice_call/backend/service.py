@@ -151,16 +151,20 @@ class VoiceBotService(BaseModel):
                     input_event.payload, UserParametersPayload
                 ):
                     # Store the six parameters
+                    INFO(f"[PARAM_DEBUG] Before update - current_user_responds: '{self.current_user_responds}'")
                     self.current_question = input_event.payload.question
                     self.current_answer = input_event.payload.answer
                     self.current_user_responds = input_event.payload.user_responds
                     self.current_question_stem = input_event.payload.question_stem
                     self.current_student_name = input_event.payload.student_name
                     self.current_question_category = input_event.payload.question_category
-                    INFO(f"Received user parameters: question={self.current_question}, "
-                         f"answer={self.current_answer}, user_responds={self.current_user_responds}, "
-                         f"question_stem={self.current_question_stem}, student_name={self.current_student_name}, "
-                         f"question_category={self.current_question_category}")
+                    INFO(f"[PARAM_RECEIVED] ✅ User parameters stored successfully:")
+                    INFO(f"  📝 question: '{self.current_question}'")
+                    INFO(f"  ✅ answer: '{self.current_answer}'")
+                    INFO(f"  🗣️ user_responds: '{self.current_user_responds}'")
+                    INFO(f"  📋 question_stem: '{self.current_question_stem}'")
+                    INFO(f"  👤 student_name: '{self.current_student_name}'")
+                    INFO(f"  🏷️ question_category: '{self.current_question_category}'")
                 elif input_event.event == USER_AUDIO and input_event.data:
                     yield input_event.data
 
@@ -176,6 +180,9 @@ class VoiceBotService(BaseModel):
             if self.state == StateIdle:
                 if self.asr_buffer and self.asr_no_input_duration > ASRInterval:
                     # Update user_responds with ASR result
+                    INFO(f"[ASR_OVERRIDE] ⚠️ ASR will override user_responds:")
+                    INFO(f"  OLD user_responds: '{self.current_user_responds}'")
+                    INFO(f"  NEW user_responds: '{self.asr_buffer}'")
                     self.current_user_responds = self.asr_buffer
                     yield SentenceRecognizedPayload(sentence=self.asr_buffer)
                     self.asr_buffer = ""
@@ -235,8 +242,12 @@ class VoiceBotService(BaseModel):
         """
         Stream chat with the LLM and generate responses.
         """
+        INFO(f"[LLM_CALL] 🚀 Starting LLM chat with provider: {self.llm_provider.value}")
+        INFO(f"[LLM_CALL] 📝 ASR text input: '{text}'")
+        
         if self.llm_provider == LLMProvider.DIFY:
             # Use Dify workflow
+            INFO(f"[LLM_CALL] 🔄 Calling Dify workflow...")
             async for chunk in self._stream_dify_chat(text):
                 yield chunk
         else:
@@ -275,6 +286,14 @@ class VoiceBotService(BaseModel):
             raise ValueError("Dify client not initialized")
         
         # Prepare inputs with all user parameters
+        INFO(f"[DIFY_PREPARE] 🔍 Checking current parameter state before Dify call:")
+        INFO(f"  📝 question: '{self.current_question}' (len: {len(self.current_question)})")
+        INFO(f"  ✅ answer: '{self.current_answer}' (len: {len(self.current_answer)})")
+        INFO(f"  🗣️ user_responds: '{self.current_user_responds}' (len: {len(self.current_user_responds)})")
+        INFO(f"  📋 question_stem: '{self.current_question_stem}' (len: {len(self.current_question_stem)})")
+        INFO(f"  👤 student_name: '{self.current_student_name}' (len: {len(self.current_student_name)})")
+        INFO(f"  🏷️ question_category: '{self.current_question_category}' (len: {len(self.current_question_category)})")
+        
         inputs = {
             "question": self.current_question,
             "answer": self.current_answer,
@@ -284,10 +303,17 @@ class VoiceBotService(BaseModel):
             "question_category": self.current_question_category,
         }
         
+        # Validate inputs for empty values
+        empty_params = [k for k, v in inputs.items() if not v or v.strip() == ""]
+        if empty_params:
+            INFO(f"[DIFY_WARNING] ⚠️ Empty parameters detected: {empty_params}")
+        else:
+            INFO(f"[DIFY_VALIDATION] ✅ All parameters have values")
+        
         # Generate timestamp for logging
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         
-        INFO(f"[DIFY_REQUEST] {timestamp} | Sending to Dify with inputs: {inputs}")
+        INFO(f"[DIFY_REQUEST] {timestamp} | 🚀 Sending to Dify with inputs: {inputs}")
         
         completion_buffer = ""
         final_result = ""  # Store the final result from workflow_finished event
