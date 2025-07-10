@@ -13,9 +13,18 @@ import json
 import uuid
 from typing import AsyncIterable, Dict, Any, Optional
 
-import httpx
+import aiohttp
 from pydantic import BaseModel
-from arkitect.telemetry.logger import INFO, ERROR
+
+# 兼容性日志函数
+try:
+    from arkitect.telemetry.logger import INFO, ERROR
+except ImportError:
+    def INFO(msg):
+        print(f"[INFO] {msg}")
+
+    def ERROR(msg):
+        print(f"[ERROR] {msg}")
 
 
 class DifyClient:
@@ -76,68 +85,52 @@ class DifyClient:
         INFO(f"Dify API payload: {json.dumps(payload, indent=2)}")
         
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                async with client.stream(
-                    'POST',
-                    url,
-                    headers=self.headers,
-                    json=payload
-                ) as response:
-                    if response.status_code != 200:
-                        error_text = await response.aread()
-                        ERROR(f"Dify API error: {response.status_code} - {error_text}")
-                        raise Exception(f"Dify API error: {response.status_code}")
+            async with aiohttp.ClientSession(headers=self.headers) as session:
+                async with session.post(url, json=payload) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        ERROR(f"Dify API error: {response.status} - {error_text}")
+                        raise Exception(f"Dify API error: {response.status}")
                     
-                    buffer = ""
-                    async for chunk in response.aiter_text():
-                        buffer += chunk
-                        # Process Server-Sent Events format
-                        lines = buffer.split('\n')
-                        buffer = lines[-1]  # Keep incomplete line in buffer
+                    # Process Server-Sent Events format like in direct_dify_test
+                    async for line in response.content:
+                        line = line.decode('utf-8').strip()
                         
-                        for line in lines[:-1]:
-                            line = line.strip()
-                            if line.startswith('data: '):
-                                data = line[6:]  # Remove 'data: ' prefix
-                                if data == '[DONE]':
-                                    return
-                                if data:
-                                    try:
-                                        event_data = json.loads(data)
-                                        INFO(f"Dify streaming event: {event_data}")
+                        if not line:
+                            continue
+                        
+                        if line.startswith('data: '):
+                            try:
+                                data = json.loads(line[6:])
+                                event_type = data.get('event', '')
+                                INFO(f"Dify streaming event: {event_type}")
+                                
+                                # Handle different event types (based on successful test)
+                                if event_type == 'text_chunk':
+                                    text = data.get('data', {}).get('text', '')
+                                    if text:
+                                        yield text
+                                elif event_type == 'workflow_finished':
+                                    # Extract final result like in direct_dify_test
+                                    outputs = data.get('data', {}).get('outputs', {})
+                                    final_result = outputs.get('result', '')
+                                    if final_result:
+                                        yield final_result
+                                    break
+                                elif event_type == 'node_finished':
+                                    # Check for text outputs in node completion
+                                    node_data = data.get('data', {})
+                                    outputs = node_data.get('outputs', {})
+                                    if 'text' in outputs and outputs['text']:
+                                        yield outputs['text']
+                                elif event_type == 'error':
+                                    error_msg = data.get('data', {}).get('message', 'Unknown error')
+                                    ERROR(f"Dify workflow error: {error_msg}")
+                                    raise Exception(f"Dify workflow error: {error_msg}")
                                         
-                                        # Handle different event types
-                                        if event_data.get('event') == 'text_chunk':
-                                            # Extract text content from workflow response
-                                            if 'data' in event_data:
-                                                text = event_data['data'].get('text', '')
-                                                if text:
-                                                    yield text
-                                        elif event_data.get('event') == 'workflow_finished':
-                                            # Extract final output if available
-                                            if 'data' in event_data and 'outputs' in event_data['data']:
-                                                outputs = event_data['data']['outputs']
-                                                # Look for text output in various possible fields
-                                                for key, value in outputs.items():
-                                                    if isinstance(value, str) and value.strip():
-                                                        yield value
-                                                        break
-                                        elif event_data.get('event') == 'node_finished':
-                                            # Extract node output if it contains text
-                                            if 'data' in event_data and 'outputs' in event_data['data']:
-                                                outputs = event_data['data']['outputs']
-                                                for key, value in outputs.items():
-                                                    if isinstance(value, str) and value.strip():
-                                                        yield value
-                                                        break
-                                        elif event_data.get('event') == 'error':
-                                            error_msg = event_data.get('message', 'Unknown error')
-                                            ERROR(f"Dify workflow error: {error_msg}")
-                                            raise Exception(f"Dify workflow error: {error_msg}")
-                                            
-                                    except json.JSONDecodeError as e:
-                                        ERROR(f"Failed to parse Dify response: {e}")
-                                        continue
+                            except json.JSONDecodeError as e:
+                                ERROR(f"Failed to parse Dify response: {e}")
+                                continue
                         
         except Exception as e:
             ERROR(f"Dify API request failed: {str(e)}")
