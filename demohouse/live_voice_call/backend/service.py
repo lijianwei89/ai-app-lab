@@ -133,26 +133,23 @@ class VoiceBotService(BaseModel):
 
         async def async_gen() -> AsyncIterable[bytes]:
             async for input_event in inputs:
-                if self.state != StateIdle:
-                    INFO("service is InProgress, will ignore the incoming input")
-                    continue
-                elif not self.asr_client.inited:
-                    INFO("need recreate asr conn")
-                    await self.asr_client.init()
-
                 # Only log non-audio events to reduce noise
                 if input_event.event != USER_AUDIO:
                     INFO(
                         f"[EVENT_RECEIVED] 📨 {input_event.event} | payload_type={type(input_event.payload).__name__}"
                     )
+                
+                # Handle configuration events even when service is InProgress
                 if input_event.event == BOT_UPDATE_CONFIG and isinstance(
                     input_event.payload, BotUpdateConfigPayload
                 ):
+                    INFO(f"[CONFIG] 🔧 Updating TTS speaker: {input_event.payload.speaker}")
                     self.tts_speaker = input_event.payload.speaker
+                    continue
                 elif input_event.event == USER_PARAMETERS and isinstance(
                     input_event.payload, UserParametersPayload
                 ):
-                    # Store the six parameters
+                    # Store the six parameters - allowed even when InProgress
                     INFO(f"[PARAM_DEBUG] Before update - current_user_responds: '{self.current_user_responds}'")
                     self.current_question = input_event.payload.question
                     self.current_answer = input_event.payload.answer
@@ -167,7 +164,18 @@ class VoiceBotService(BaseModel):
                     INFO(f"  📋 question_stem: '{self.current_question_stem}'")
                     INFO(f"  👤 student_name: '{self.current_student_name}'")
                     INFO(f"  🏷️ question_category: '{self.current_question_category}'")
-                elif input_event.event == USER_AUDIO and input_event.data:
+                    continue
+                
+                # For audio processing, check if service is busy
+                if self.state != StateIdle:
+                    INFO(f"[AUDIO_BLOCKED] 🚫 Service is {self.state}, ignoring audio input")
+                    continue
+                elif not self.asr_client.inited:
+                    INFO("need recreate asr conn")
+                    await self.asr_client.init()
+                
+                # Process audio data
+                if input_event.event == USER_AUDIO and input_event.data:
                     yield input_event.data
 
         return self.asr_client.stream_asr(async_gen())
