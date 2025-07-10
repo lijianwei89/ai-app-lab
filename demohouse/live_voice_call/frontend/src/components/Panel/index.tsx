@@ -145,12 +145,47 @@ export const Panel = () => {
             />
           </div>
         </div>
-        <Input.TextArea
-          id={'log'}
-          readOnly
-          className={'w-full h-[400px] text-[12px] flex flex-col-reverse'}
-          value={logContent.reverse().join('\n')}
-        />
+        <div className="mb-2 text-xs text-gray-600">
+          <div className="font-semibold mb-1">日志说明:</div>
+          <div className="flex flex-wrap gap-4">
+            <span className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-100 border-l-2 border-blue-600"></div>Dify请求</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 bg-green-100 border-l-2 border-green-600"></div>Dify成功响应</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 bg-red-100 border-l-2 border-red-600"></div>Dify错误响应</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 bg-yellow-100 border-l-2 border-yellow-600"></div>用户参数</span>
+          </div>
+        </div>
+        <div className={'w-full h-[400px] text-[12px] flex flex-col-reverse border border-gray-300 rounded-md p-2 overflow-y-auto bg-white'}>
+          {logContent.slice().reverse().map((line, index) => {
+            // 检查是否为Dify相关日志
+            const isDifyRequest = line.includes('[DIFY_REQUEST]');
+            const isDifyResponse = line.includes('[DIFY_RESPONSE]');
+            const isDifySuccess = line.includes('| SUCCESS |');
+            const isDifyError = line.includes('| ERROR |');
+            
+            let className = 'mb-1 font-mono';
+            let style = {};
+            
+            if (isDifyRequest) {
+              className += ' bg-blue-100 text-blue-800 p-1 rounded';
+              style = { borderLeft: '4px solid #3b82f6' };
+            } else if (isDifyResponse && isDifySuccess) {
+              className += ' bg-green-100 text-green-800 p-1 rounded';
+              style = { borderLeft: '4px solid #10b981' };
+            } else if (isDifyResponse && isDifyError) {
+              className += ' bg-red-100 text-red-800 p-1 rounded';
+              style = { borderLeft: '4px solid #ef4444' };
+            } else if (line.includes('UserParameters') || line.includes('[USER_PARAMS]')) {
+              className += ' bg-yellow-100 text-yellow-800 p-1 rounded';
+              style = { borderLeft: '4px solid #f59e0b' };
+            }
+            
+            return (
+              <div key={index} className={className} style={style}>
+                <pre className="whitespace-pre-wrap break-words text-xs">{line}</pre>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

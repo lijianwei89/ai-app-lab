@@ -26,6 +26,7 @@ from arkitect.telemetry.logger import INFO
 from event import *
 from prompt import VoiceBotPrompt
 from dify_client import DifyClient
+import time
 
 StateInProgress = "InProgress"
 StateIdle = "Idle"
@@ -283,7 +284,10 @@ class VoiceBotService(BaseModel):
             "question_category": self.current_question_category,
         }
         
-        INFO(f"Sending to Dify with inputs: {inputs}")
+        # Generate timestamp for logging
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        
+        INFO(f"[DIFY_REQUEST] {timestamp} | Sending to Dify with inputs: {inputs}")
         
         completion_buffer = ""
         final_result = ""  # Store the final result from workflow_finished event
@@ -301,14 +305,18 @@ class VoiceBotService(BaseModel):
             
             # Only yield the final result for TTS, not intermediate chunks
             if final_result:
-                INFO(f"Using final Dify result for TTS: {final_result}")
+                response_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                INFO(f"[DIFY_RESPONSE] {response_timestamp} | SUCCESS | Result: {final_result}")
                 yield final_result
             else:
                 # Fallback if no final result
+                response_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                INFO(f"[DIFY_RESPONSE] {response_timestamp} | SUCCESS | Fallback result: {completion_buffer}")
                 yield completion_buffer
                     
         except Exception as e:
-            INFO(f"Dify streaming error: {str(e)}")
+            error_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            INFO(f"[DIFY_RESPONSE] {error_timestamp} | ERROR | {str(e)}")
             # Fallback to a simple response
             error_response = f"抱歉，我遇到了一些问题：{str(e)}"
             yield error_response

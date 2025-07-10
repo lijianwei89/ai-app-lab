@@ -123,10 +123,15 @@ export const useVoiceBotService = (userParameters: IUserParameters) => {
                   user_responds: content,
                 },
               });
-              log('send | event:' + EventType.UserParameters + ' payload: ' + JSON.stringify({
+              // Format user parameters for better readability in logs
+              const userParams = {
                 ...userParametersRef.current,
                 user_responds: content,
-              }));
+              };
+              log('send | event:' + EventType.UserParameters + ' payload: ' + JSON.stringify(userParams, null, 2));
+              
+              // Add a special log entry for Dify parameters visibility
+              log(`[USER_PARAMS] 📝 Question: "${userParams.question}" | Answer: "${userParams.answer}" | User Response: "${userParams.user_responds}" | Student: "${userParams.student_name}" | Category: "${userParams.question_category}"`);
             }
             break;
           case EventType.TTSSentenceStart:

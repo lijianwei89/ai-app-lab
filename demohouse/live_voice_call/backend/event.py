@@ -25,6 +25,8 @@ TTS_SENTENCE_END = "TTSSentenceEnd"
 TTS_DONE = "TTSDone"
 BOT_ERROR = "BotError"
 CONNECTION_CLOSED = "ConnectionClosed"
+DIFY_REQUEST = "DifyRequest"
+DIFY_RESPONSE = "DifyResponse"
 
 
 class WebPayload(ABC):
@@ -145,6 +147,36 @@ class BotErrorPayload(WebPayload, BaseModel):
     error: ErrorEvent = Field(default_factory=ErrorEvent)
 
 
+class DifyRequestPayload(WebPayload, BaseModel):
+    """
+    Payload for the DifyRequest event.
+
+    Attributes:
+        inputs (dict): The input parameters sent to Dify.
+        timestamp (str): The timestamp of the request.
+    """
+
+    inputs: dict
+    timestamp: str
+
+
+class DifyResponsePayload(WebPayload, BaseModel):
+    """
+    Payload for the DifyResponse event.
+
+    Attributes:
+        result (str): The final result from Dify.
+        success (bool): Whether the request was successful.
+        error (Optional[str]): Error message if any.
+        timestamp (str): The timestamp of the response.
+    """
+
+    result: str
+    success: bool
+    error: Optional[str] = None
+    timestamp: str
+
+
 # Define WebEvent
 class WebEvent(BaseModel):
     """
@@ -195,5 +227,9 @@ class WebEvent(BaseModel):
             return cls(event=TTS_DONE)
         elif isinstance(payload, BotErrorPayload):
             return cls(event=BOT_ERROR, payload=payload)
+        elif isinstance(payload, DifyRequestPayload):
+            return cls(event=DIFY_REQUEST, payload=payload)
+        elif isinstance(payload, DifyResponsePayload):
+            return cls(event=DIFY_RESPONSE, payload=payload)
         else:
             raise ValueError("Invalid payload type")
