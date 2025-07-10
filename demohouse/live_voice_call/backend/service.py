@@ -118,6 +118,7 @@ class VoiceBotService(BaseModel):
             # set state into InProgress
             self.state = StateInProgress
             yield WebEvent.from_payload(asr_recognized)
+            
             llm_stream_rsp = self.stream_llm_chat(asr_recognized.sentence)
             async for payload in self.handle_tts_response(llm_stream_rsp):
                 yield WebEvent.from_payload(payload)
