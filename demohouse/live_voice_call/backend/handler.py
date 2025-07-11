@@ -18,17 +18,22 @@ import websockets
 
 from arkitect.telemetry.logger import INFO
 from arkitect.utils.event_loop import get_event_loop
-from service import VoiceBotService
+from service import VoiceBotService, LLMProvider
 from utils import *
 
 # replace with your asr API access
 ASR_ACCESS_TOKEN = "{YOUR_ASR_ACCESS_TOKEN}"
-ASR_APP_ID = "{YOUR_ASR_APP_ID}"
+ASR_APP_ID = "{YOUR_ASR_ACCESS_TOKEN}"
 # replace with your tts API access
-TTS_ACCESS_TOKEN = "{YOUR_TTS_ACCESS_TOKEN}"
+TTS_ACCESS_TOKEN = "{YOUR_ASR_ACCESS_TOKEN}"
 TTS_APP_ID = "{YOUR_TTS_APP_ID}"
 # replace with your ark endpoint
 LLM_ENDPOINT_ID = "{YOUR_ARK_LLM_ENDPOINT_ID}"
+# replace with your dify API access
+DIFY_API_KEY = "app-JqtJdpgiEKukUAxxT8oiJR4u"
+DIFY_BASE_URL = "https://api.dify.ai"
+# LLM Provider: "ark" or "dify"
+LLM_PROVIDER = "dify"
 
 # Configure logging
 logging.basicConfig(
@@ -51,6 +56,9 @@ async def handler(websocket: websockets.WebSocketCommonProtocol, path):
         tts_access_key=TTS_ACCESS_TOKEN,
         asr_app_key=ASR_APP_ID,
         asr_access_key=ASR_ACCESS_TOKEN,
+        llm_provider=LLMProvider.DIFY if LLM_PROVIDER == "dify" else LLMProvider.ARK,
+        dify_api_key=DIFY_API_KEY if LLM_PROVIDER == "dify" else None,
+        dify_base_url=DIFY_BASE_URL,
     )
     await service.init()
     # Send a bot ready message
@@ -74,10 +82,11 @@ async def handler(websocket: websockets.WebSocketCommonProtocol, path):
         """
         async for m in ws:
             input_event = convert_binary_to_web_event_to_binary(m)
-            INFO(
-                f"Received input event: {input_event.event}, \
-                payload: {input_event.event}, data len:{len(input_event.data)}"
-            )
+            # Only log non-audio input events to reduce noise
+            if input_event.event != "UserAudio":
+                INFO(
+                    f"[INPUT] 📥 {input_event.event} | data_len:{len(input_event.data) if input_event.data else 0}"
+                )
             yield input_event
 
     async def fetch_output(
@@ -91,10 +100,11 @@ async def handler(websocket: websockets.WebSocketCommonProtocol, path):
             output_events (AsyncIterable[WebEvent]): An asynchronous generator of output events.
         """
         async for output_event in output_events:
-            INFO(
-                f"Sending output event= {output_event.event}, \
-                data len:{len(output_event.data) if output_event.data else 0} , payload: {output_event.payload}"
-            )
+            # Only log important output events, skip frequent audio events
+            if output_event.event not in ['TTSSentenceEnd']:
+                INFO(
+                    f"[OUTPUT] 📤 {output_event.event} | data_len:{len(output_event.data) if output_event.data else 0}"
+                )
             await ws.send(convert_web_event_to_binary(output_event))
 
     INFO(f"New connection: {websocket.remote_address}")

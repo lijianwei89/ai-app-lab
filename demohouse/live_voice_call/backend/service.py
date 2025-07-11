@@ -9,8 +9,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License. 
 
-from typing import AsyncIterable, List, Union
+from typing import AsyncIterable, List, Union, Optional
+from enum import Enum
 
+from pydantic import BaseModel
 from arkitect.core.component.asr import ASRFullServerResponse, AsyncASRClient
 from arkitect.core.component.llm import BaseChatLanguageModel
 from arkitect.core.component.llm.model import ArkMessage
@@ -23,6 +25,8 @@ from arkitect.core.component.tts.constants import (
 from arkitect.telemetry.logger import INFO
 from event import *
 from prompt import VoiceBotPrompt
+from dify_client import DifyClient
+import time
 
 StateInProgress = "InProgress"
 StateIdle = "Idle"
@@ -30,6 +34,12 @@ StateIdle = "Idle"
 ASRInterval = 2000
 # Default tts live_voice_call
 DEFAULT_SPEAKER = "zh_female_sajiaonvyou_moon_bigtts"
+
+
+class LLMProvider(Enum):
+    """Enumeration of available LLM providers."""
+    ARK = "ark"
+    DIFY = "dify"
 
 
 class VoiceBotService(BaseModel):
@@ -46,6 +56,12 @@ class VoiceBotService(BaseModel):
     asr_access_key: str
     tts_app_key: str
     tts_access_key: str
+    
+    # LLM Provider Configuration
+    llm_provider: LLMProvider = LLMProvider.ARK
+    dify_api_key: Optional[str] = None
+    dify_base_url: str = "https://api.dify.ai"
+    dify_client: Optional[DifyClient] = None
 
     history_messages: List[ArkMessage] = []  # Store historical dialogue information
 
@@ -68,7 +84,7 @@ class VoiceBotService(BaseModel):
 
     async def init(self):
         """
-        Initialize the TTS and ASR clients.
+        Initialize the TTS, ASR, and LLM clients.
         """
         self.tts_client = AsyncTTSClient(
             app_key=self.tts_app_key,
@@ -82,6 +98,14 @@ class VoiceBotService(BaseModel):
         )
         await self.asr_client.init()
         await self.tts_client.init()
+        
+        # Initialize Dify client if using Dify provider
+        if self.llm_provider == LLMProvider.DIFY and self.dify_api_key:
+            self.dify_client = DifyClient(
+                api_key=self.dify_api_key,
+                base_url=self.dify_base_url
+            )
+            INFO(f"Initialized Dify client with base URL: {self.dify_base_url}")
 
     async def handler_loop(
         self, inputs: AsyncIterable[WebEvent]
@@ -94,6 +118,7 @@ class VoiceBotService(BaseModel):
             # set state into InProgress
             self.state = StateInProgress
             yield WebEvent.from_payload(asr_recognized)
+            
             llm_stream_rsp = self.stream_llm_chat(asr_recognized.sentence)
             async for payload in self.handle_tts_response(llm_stream_rsp):
                 yield WebEvent.from_payload(payload)
@@ -109,35 +134,49 @@ class VoiceBotService(BaseModel):
 
         async def async_gen() -> AsyncIterable[bytes]:
             async for input_event in inputs:
-                if self.state != StateIdle:
-                    INFO("service is InProgress, will ignore the incoming input")
-                    continue
-                elif not self.asr_client.inited:
-                    INFO("need recreate asr conn")
-                    await self.asr_client.init()
-
-                INFO(
-                    f"receive input, event={input_event.event} payload={input_event.payload}"
-                )
+                # Only log non-audio events to reduce noise
+                if input_event.event != USER_AUDIO:
+                    INFO(
+                        f"[EVENT_RECEIVED] 📨 {input_event.event} | payload_type={type(input_event.payload).__name__}"
+                    )
+                
+                # Handle configuration events even when service is InProgress
                 if input_event.event == BOT_UPDATE_CONFIG and isinstance(
                     input_event.payload, BotUpdateConfigPayload
                 ):
+                    INFO(f"[CONFIG] 🔧 Updating TTS speaker: {input_event.payload.speaker}")
                     self.tts_speaker = input_event.payload.speaker
+                    continue
                 elif input_event.event == USER_PARAMETERS and isinstance(
                     input_event.payload, UserParametersPayload
                 ):
-                    # Store the six parameters
+                    # Store the six parameters - allowed even when InProgress
+                    INFO(f"[PARAM_DEBUG] Before update - current_user_responds: '{self.current_user_responds}'")
                     self.current_question = input_event.payload.question
                     self.current_answer = input_event.payload.answer
                     self.current_user_responds = input_event.payload.user_responds
                     self.current_question_stem = input_event.payload.question_stem
                     self.current_student_name = input_event.payload.student_name
                     self.current_question_category = input_event.payload.question_category
-                    INFO(f"Received user parameters: question={self.current_question}, "
-                         f"answer={self.current_answer}, user_responds={self.current_user_responds}, "
-                         f"question_stem={self.current_question_stem}, student_name={self.current_student_name}, "
-                         f"question_category={self.current_question_category}")
-                elif input_event.event == USER_AUDIO and input_event.data:
+                    INFO(f"[PARAM_RECEIVED] ✅ User parameters stored successfully:")
+                    INFO(f"  📝 question: '{self.current_question}'")
+                    INFO(f"  ✅ answer: '{self.current_answer}'")
+                    INFO(f"  🗣️ user_responds: '{self.current_user_responds}'")
+                    INFO(f"  📋 question_stem: '{self.current_question_stem}'")
+                    INFO(f"  👤 student_name: '{self.current_student_name}'")
+                    INFO(f"  🏷️ question_category: '{self.current_question_category}'")
+                    continue
+                
+                # For audio processing, check if service is busy
+                if self.state != StateIdle:
+                    INFO(f"[AUDIO_BLOCKED] 🚫 Service is {self.state}, ignoring audio input")
+                    continue
+                elif not self.asr_client.inited:
+                    INFO("need recreate asr conn")
+                    await self.asr_client.init()
+                
+                # Process audio data
+                if input_event.event == USER_AUDIO and input_event.data:
                     yield input_event.data
 
         return self.asr_client.stream_asr(async_gen())
@@ -152,6 +191,9 @@ class VoiceBotService(BaseModel):
             if self.state == StateIdle:
                 if self.asr_buffer and self.asr_no_input_duration > ASRInterval:
                     # Update user_responds with ASR result
+                    INFO(f"[ASR_OVERRIDE] ⚠️ ASR will override user_responds:")
+                    INFO(f"  OLD user_responds: '{self.current_user_responds}'")
+                    INFO(f"  NEW user_responds: '{self.asr_buffer}'")
                     self.current_user_responds = self.asr_buffer
                     yield SentenceRecognizedPayload(sentence=self.asr_buffer)
                     self.asr_buffer = ""
@@ -168,9 +210,10 @@ class VoiceBotService(BaseModel):
                         self.asr_no_input_duration = (
                             response.audio.duration - self.asr_last_duration
                         )
-                    INFO(
-                        f"asr buffer incremented: {increment_len}, utterances: {response.result.utterances}"
-                    )
+                    # Only log when there's actual content change
+                    if increment_len > 0:
+                        INFO(f"[ASR] 🎤 Speech recognized: '{response.result.text}'")
+                    # Skip logging for no-change ASR responses to reduce noise
             else:
                 INFO("service is InProgress, will ignore the newer asr response")
                 continue
@@ -184,25 +227,33 @@ class VoiceBotService(BaseModel):
         Handle TTS responses and generate TTS events.
         """
         buffer = bytearray()
+        total_audio_chunks = 0
+        total_audio_bytes = 0
+        
         if not self.tts_client.inited:
-            INFO("need recreate tts client")
+            INFO("[TTS] 🔄 Recreating TTS client")
             await self.tts_client.init()
+            
         async for tts_rsp in self.tts_client.tts(
             source=llm_output, include_transcript=True
         ):
-            INFO(
-                f"receive tts response: event={tts_rsp.event} transcript={tts_rsp.transcript} \
-                audio len={len(tts_rsp.audio) if tts_rsp.audio else 0}"
-            )
+            # Only log important TTS events, not every audio chunk
             if tts_rsp.event == EventTTSSentenceStart:
+                INFO(f"[TTS] 🎤 Sentence start: '{tts_rsp.transcript}'")
                 yield TTSSentenceStartPayload(sentence=tts_rsp.transcript)
             elif tts_rsp.event == EventTTSSentenceEnd:
+                INFO(f"[TTS] ✅ Sentence end: {len(buffer)} bytes total, {total_audio_chunks} chunks")
                 yield TTSSentenceEndPayload(data=buffer)
                 buffer.clear()
+                total_audio_chunks = 0
+                total_audio_bytes = 0
             elif tts_rsp.audio:
                 buffer.extend(tts_rsp.audio)
+                total_audio_chunks += 1
+                total_audio_bytes += len(tts_rsp.audio)
 
             if tts_rsp.event == EventSessionFinished:
+                INFO(f"[TTS] 🏁 Session finished")
                 yield TTSDonePayload()
                 await self.tts_client.close()
                 break
@@ -210,6 +261,23 @@ class VoiceBotService(BaseModel):
     async def stream_llm_chat(self, text: str) -> AsyncIterable[str]:
         """
         Stream chat with the LLM and generate responses.
+        """
+        INFO(f"[LLM_CALL] 🚀 Starting LLM chat with provider: {self.llm_provider.value}")
+        INFO(f"[LLM_CALL] 📝 ASR text input: '{text}'")
+        
+        if self.llm_provider == LLMProvider.DIFY:
+            # Use Dify workflow
+            INFO(f"[LLM_CALL] 🔄 Calling Dify workflow...")
+            async for chunk in self._stream_dify_chat(text):
+                yield chunk
+        else:
+            # Use ARK LLM (default)
+            async for chunk in self._stream_ark_chat(text):
+                yield chunk
+    
+    async def _stream_ark_chat(self, text: str) -> AsyncIterable[str]:
+        """
+        Stream chat with ARK LLM.
         """
         self.history_messages.append(ArkMessage(**{"role": "user", "content": text}))
 
@@ -226,6 +294,85 @@ class VoiceBotService(BaseModel):
                 completion_buffer += chunk.choices[0].delta.content
 
         if completion_buffer:
+            self.history_messages.append(
+                ArkMessage(**{"role": "assistant", "content": completion_buffer})
+            )
+    
+    async def _stream_dify_chat(self, text: str) -> AsyncIterable[str]:
+        """
+        Stream chat with Dify workflow.
+        """
+        if not self.dify_client:
+            raise ValueError("Dify client not initialized")
+        
+        # Prepare inputs with all user parameters
+        INFO(f"[DIFY_PREPARE] 🔍 Checking current parameter state before Dify call:")
+        INFO(f"  📝 question: '{self.current_question}' (len: {len(self.current_question)})")
+        INFO(f"  ✅ answer: '{self.current_answer}' (len: {len(self.current_answer)})")
+        INFO(f"  🗣️ user_responds: '{self.current_user_responds}' (len: {len(self.current_user_responds)})")
+        INFO(f"  📋 question_stem: '{self.current_question_stem}' (len: {len(self.current_question_stem)})")
+        INFO(f"  👤 student_name: '{self.current_student_name}' (len: {len(self.current_student_name)})")
+        INFO(f"  🏷️ question_category: '{self.current_question_category}' (len: {len(self.current_question_category)})")
+        
+        inputs = {
+            "question": self.current_question,
+            "answer": self.current_answer,
+            "user_responds": self.current_user_responds,
+            "question_stem": self.current_question_stem,
+            "student_name": self.current_student_name,
+            "question_category": self.current_question_category,
+        }
+        
+        # Validate inputs for empty values
+        empty_params = [k for k, v in inputs.items() if not v or v.strip() == ""]
+        if empty_params:
+            INFO(f"[DIFY_WARNING] ⚠️ Empty parameters detected: {empty_params}")
+        else:
+            INFO(f"[DIFY_VALIDATION] ✅ All parameters have values")
+        
+        # Generate timestamp for logging
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        
+        INFO(f"[DIFY_REQUEST] {timestamp} | 🚀 Sending to Dify with inputs: {inputs}")
+        
+        completion_buffer = ""
+        final_result = ""  # Store the final result from workflow_finished event
+        
+        try:
+            async for chunk in self.dify_client.stream_workflow_run(
+                inputs=inputs,
+                user_id=f"user-{self.current_student_name or 'anonymous'}"
+            ):
+                if chunk:
+                    # Check if this is the final result (from workflow_finished event)
+                    # The Dify client now prioritizes 'result' field content
+                    final_result = chunk
+                    completion_buffer += chunk
+            
+            # Only yield the final result for TTS, not intermediate chunks
+            if final_result:
+                response_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                INFO(f"[DIFY_RESPONSE] {response_timestamp} | SUCCESS | Result: {final_result}")
+                yield final_result
+            else:
+                # Fallback if no final result
+                response_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                INFO(f"[DIFY_RESPONSE] {response_timestamp} | SUCCESS | Fallback result: {completion_buffer}")
+                yield completion_buffer
+                    
+        except Exception as e:
+            error_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            INFO(f"[DIFY_RESPONSE] {error_timestamp} | ERROR | {str(e)}")
+            # Fallback to a simple response
+            error_response = f"抱歉，我遇到了一些问题：{str(e)}"
+            yield error_response
+            completion_buffer = error_response
+        
+        # Store the conversation for context (optional)
+        if completion_buffer:
+            self.history_messages.append(
+                ArkMessage(**{"role": "user", "content": text})
+            )
             self.history_messages.append(
                 ArkMessage(**{"role": "assistant", "content": completion_buffer})
             )

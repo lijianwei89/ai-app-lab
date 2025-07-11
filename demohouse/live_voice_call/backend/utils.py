@@ -108,11 +108,41 @@ def convert_binary_to_web_event_to_binary(data: bytes) -> WebEvent:
     Returns:
         WebEvent: The parsed WebEvent event.
     """
+    from arkitect.telemetry.logger import INFO
+    
     # Parse the request
     req = parse_request(data)
+    INFO(f"[PARSE_DEBUG] 🔍 parse_request result type: {type(req)}")
+    
     # If the parsing result is a dictionary, convert it to a WebEvent object
     if isinstance(req, dict):
-        return WebEvent.parse_obj(req)
+        INFO(f"[PARSE_DEBUG] 📋 Dictionary parsed: {req}")
+        try:
+            # Extract event type and payload
+            event_type = req.get('event')
+            payload_data = req.get('payload', {})
+            
+            INFO(f"[PARSE_DEBUG] 🔍 Event type: {event_type}, payload_data: {payload_data}")
+            
+            # Convert payload dict to appropriate payload object based on event type
+            if event_type == USER_PARAMETERS:
+                from event import UserParametersPayload
+                payload = UserParametersPayload(**payload_data)
+                web_event = WebEvent(event=event_type, payload=payload)
+            elif event_type == BOT_UPDATE_CONFIG:
+                from event import BotUpdateConfigPayload
+                payload = BotUpdateConfigPayload(**payload_data)
+                web_event = WebEvent(event=event_type, payload=payload)
+            else:
+                # For other events, try direct parsing
+                web_event = WebEvent.parse_obj(req)
+            
+            INFO(f"[PARSE_DEBUG] ✅ WebEvent created: event={web_event.event}, payload_type={type(web_event.payload)}")
+            return web_event
+        except Exception as e:
+            INFO(f"[PARSE_DEBUG] ❌ Failed to parse WebEvent: {e}")
+            raise e
     # Otherwise, create a new WebEvent object containing the audio data
     else:
+        INFO(f"[PARSE_DEBUG] 🎵 Creating USER_AUDIO event, data len: {len(req) if req else 0}")
         return WebEvent(event=USER_AUDIO, data=req)

@@ -72,6 +72,15 @@ export const useVoiceBotService = (userParameters: IUserParameters) => {
         .then(() => {
           setWsConnected(true);
           log('connect success');
+          
+          // Send user parameters immediately after connection
+          serviceRef.current?.sendMessage({
+            event: EventType.UserParameters,
+            payload: userParametersRef.current,
+          });
+          log('send | event:' + EventType.UserParameters + ' payload: ' + JSON.stringify(userParametersRef.current, null, 2));
+          log(`[USER_PARAMS] 📝 Initial parameters sent - Question: "${userParametersRef.current.question}" | Answer: "${userParametersRef.current.answer}" | Student: "${userParametersRef.current.student_name}" | Category: "${userParametersRef.current.question_category}"`);
+          
           recStart();
         })
         .catch(e => {
@@ -113,21 +122,6 @@ export const useVoiceBotService = (userParameters: IUserParameters) => {
               { role: 'user', content },
               { role: 'bot', content: '' },
             ]);
-            
-            // Send user parameters with ASR result
-            if (serviceRef.current) {
-              serviceRef.current.sendMessage({
-                event: EventType.UserParameters,
-                payload: {
-                  ...userParametersRef.current,
-                  user_responds: content,
-                },
-              });
-              log('send | event:' + EventType.UserParameters + ' payload: ' + JSON.stringify({
-                ...userParametersRef.current,
-                user_responds: content,
-              }));
-            }
             break;
           case EventType.TTSSentenceStart:
             setCurrentBotSentence(prevSentence => {

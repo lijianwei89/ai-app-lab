@@ -47,6 +47,8 @@ export enum EventType {
   BotUpdateConfig = 'BotUpdateConfig',
   UserAudio = 'UserAudio',
   UserParameters = 'UserParameters',
+  DifyRequest = 'DifyRequest',
+  DifyResponse = 'DifyResponse',
 }
 export interface IWebSocketResponse {
   messageType: number;
