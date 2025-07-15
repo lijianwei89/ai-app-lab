@@ -29,9 +29,11 @@ TTS_ACCESS_TOKEN = "{YOUR_ASR_ACCESS_TOKEN}"
 TTS_APP_ID = "{YOUR_TTS_APP_ID}"
 # replace with your ark endpoint
 LLM_ENDPOINT_ID = "{YOUR_ARK_LLM_ENDPOINT_ID}"
-# replace with your dify API access
-DIFY_API_KEY = "app-rCIokTn1NixIujuo4M18feAW"
+# replace with your dify API access for conversation
+DIFY_API_KEY = "app-JqtJdpgiEKukUAxxT8oiJR4u"  # For conversation workflow
 DIFY_BASE_URL = "https://api.dify.ai"
+# Opening greeting dify API access
+DIFY_OPENING_API_KEY = "app-rCIokTn1NixIujuo4M18feAW"  # For opening greeting workflow
 # LLM Provider: "ark" or "dify"
 LLM_PROVIDER = "dify"
 # Opening configuration
@@ -62,13 +64,14 @@ async def handler(websocket: websockets.WebSocketCommonProtocol, path):
         llm_provider=LLMProvider.DIFY if LLM_PROVIDER == "dify" else LLMProvider.ARK,
         dify_api_key=DIFY_API_KEY if LLM_PROVIDER == "dify" else None,
         dify_base_url=DIFY_BASE_URL,
+        # Opening configuration with separate API key
+        enable_opening=ENABLE_OPENING,
+        opening_timeout=OPENING_TIMEOUT,
+        dify_opening_api_key=DIFY_OPENING_API_KEY,
         # Enable HTTP TTS with cluster and voice_type support
         use_http_tts=True,
         tts_cluster="volcano_icl",
         tts_voice_type="S_pic297Bs1",
-        # Opening configuration
-        enable_opening=ENABLE_OPENING,
-        opening_timeout=OPENING_TIMEOUT,
     )
     await service.init()
     # Send a bot ready message

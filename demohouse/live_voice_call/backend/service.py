@@ -68,6 +68,10 @@ class VoiceBotService(BaseModel):
     dify_api_key: Optional[str] = None
     dify_base_url: str = "https://api.dify.ai"
     dify_client: Optional[DifyClient] = None
+    
+    # Opening-specific Dify configuration
+    dify_opening_api_key: Optional[str] = None
+    dify_opening_client: Optional[DifyClient] = None
 
     history_messages: List[ArkMessage] = []  # Store historical dialogue information
 
@@ -140,7 +144,15 @@ class VoiceBotService(BaseModel):
                 api_key=self.dify_api_key,
                 base_url=self.dify_base_url
             )
-            INFO(f"Initialized Dify client with base URL: {self.dify_base_url}")
+            INFO(f"Initialized Dify conversation client with base URL: {self.dify_base_url}")
+        
+        # Initialize separate Dify client for opening generation
+        if self.dify_opening_api_key:
+            self.dify_opening_client = DifyClient(
+                api_key=self.dify_opening_api_key,
+                base_url=self.dify_base_url
+            )
+            INFO(f"Initialized Dify opening client with API key: {self.dify_opening_api_key[:20]}...")
 
     async def handler_loop(
         self, inputs: AsyncIterable[WebEvent]
@@ -611,10 +623,10 @@ class VoiceBotService(BaseModel):
     
     async def _generate_opening_text(self) -> str:
         """
-        Generate opening text using Dify workflow.
+        Generate opening text using dedicated opening Dify workflow.
         """
-        if not self.dify_client:
-            INFO("[OPENING] ⚠️ Dify client not available, using default opening")
+        if not self.dify_opening_client:
+            INFO("[OPENING] ⚠️ Dify opening client not available, using default opening")
             return ""
         
         try:
@@ -624,10 +636,10 @@ class VoiceBotService(BaseModel):
                 "student_name": self.current_student_name,
             }
             
-            INFO(f"[OPENING] 🚀 Generating opening with inputs: {inputs}")
+            INFO(f"[OPENING] 🚀 Generating opening with dedicated client, inputs: {inputs}")
             
             opening_text = ""
-            async for chunk in self.dify_client.stream_workflow_run(
+            async for chunk in self.dify_opening_client.stream_workflow_run(
                 inputs=inputs,
                 user_id=f"opening-{self.current_student_name or 'anonymous'}"
             ):
