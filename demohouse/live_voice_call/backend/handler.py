@@ -59,6 +59,10 @@ async def handler(websocket: websockets.WebSocketCommonProtocol, path):
         llm_provider=LLMProvider.DIFY if LLM_PROVIDER == "dify" else LLMProvider.ARK,
         dify_api_key=DIFY_API_KEY if LLM_PROVIDER == "dify" else None,
         dify_base_url=DIFY_BASE_URL,
+        # Enable HTTP TTS with cluster and voice_type support
+        use_http_tts=True,
+        tts_cluster="volcano_icl",
+        tts_voice_type="S_pic297Bs1",
     )
     await service.init()
     # Send a bot ready message

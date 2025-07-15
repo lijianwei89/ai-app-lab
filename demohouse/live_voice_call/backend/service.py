@@ -22,6 +22,7 @@ from arkitect.core.component.tts.constants import (
     EventTTSSentenceEnd,
     EventTTSSentenceStart,
 )
+from tts_http_client import SingletonHTTPTTSManager, TTSConfig, tts_manager
 from arkitect.telemetry.logger import INFO
 from event import *
 from prompt import VoiceBotPrompt
@@ -45,6 +46,8 @@ class LLMProvider(Enum):
 class VoiceBotService(BaseModel):
     asr_client: Optional[AsyncASRClient] = None
     tts_client: Optional[AsyncTTSClient] = None
+    http_tts_manager: Optional[SingletonHTTPTTSManager] = None
+    use_http_tts: bool = True  # Flag to use HTTP TTS instead of WebSocket
     llm_ep_id: str
     state: str = StateIdle
     tts_speaker: str = DEFAULT_SPEAKER  # TTS speaker
@@ -88,27 +91,41 @@ class VoiceBotService(BaseModel):
         """
         Initialize the TTS, ASR, and LLM clients.
         """
-        connection_params = ConnectionParams(
-            speaker=self.tts_speaker, 
-            audio_params=AudioParams()
-        )
-        
-        # Add cluster and voice_type if provided
-        if self.tts_cluster:
-            connection_params.cluster = self.tts_cluster
-        if self.tts_voice_type:
-            connection_params.voice_type = self.tts_voice_type
-            
-        self.tts_client = AsyncTTSClient(
-            app_key=self.tts_app_key,
-            access_key=self.tts_access_key,
-            connection_params=connection_params,
-        )
+        # Initialize ASR client
         self.asr_client = AsyncASRClient(
             app_key=self.asr_app_key, access_key=self.asr_access_key
         )
         await self.asr_client.init()
-        await self.tts_client.init()
+        
+        if self.use_http_tts:
+            # Initialize HTTP TTS manager (singleton)
+            self.http_tts_manager = tts_manager
+            await self.http_tts_manager.initialize(
+                app_id=self.tts_app_key,
+                access_token=self.tts_access_key,
+                cluster=self.tts_cluster or "volcano_icl",
+                voice_type=self.tts_voice_type or "S_pic297Bs1"
+            )
+            INFO(f"[INIT] ✅ HTTP TTS initialized with cluster={self.tts_cluster}, voice_type={self.tts_voice_type}")
+        else:
+            # Fallback to WebSocket TTS (original implementation)
+            connection_params = ConnectionParams(
+                speaker=self.tts_speaker, 
+                audio_params=AudioParams()
+            )
+            
+            # Add cluster and voice_type if provided
+            if self.tts_cluster:
+                connection_params.cluster = self.tts_cluster
+            if self.tts_voice_type:
+                connection_params.voice_type = self.tts_voice_type
+                
+            self.tts_client = AsyncTTSClient(
+                app_key=self.tts_app_key,
+                access_key=self.tts_access_key,
+                connection_params=connection_params,
+            )
+            await self.tts_client.init()
         
         # Initialize Dify client if using Dify provider
         if self.llm_provider == LLMProvider.DIFY and self.dify_api_key:
@@ -178,25 +195,35 @@ class VoiceBotService(BaseModel):
                     # Reinitialize TTS client if any config was updated
                     if config_updated:
                         INFO("[CONFIG] 🔄 Reinitializing TTS client with new configuration")
-                        if self.tts_client and self.tts_client.inited:
-                            await self.tts_client.close()
                         
-                        connection_params = ConnectionParams(
-                            speaker=self.tts_speaker,
-                            audio_params=AudioParams()
-                        )
-                        
-                        if self.tts_cluster:
-                            connection_params.cluster = self.tts_cluster
-                        if self.tts_voice_type:
-                            connection_params.voice_type = self.tts_voice_type
+                        if self.use_http_tts and self.http_tts_manager:
+                            # Update HTTP TTS configuration
+                            await self.http_tts_manager.update_voice_config(
+                                cluster=self.tts_cluster,
+                                voice_type=self.tts_voice_type
+                            )
+                            INFO(f"[CONFIG] ✅ HTTP TTS updated: cluster={self.tts_cluster}, voice_type={self.tts_voice_type}")
+                        else:
+                            # Fallback to WebSocket TTS update
+                            if self.tts_client and getattr(self.tts_client, 'inited', False):
+                                await self.tts_client.close()
                             
-                        self.tts_client = AsyncTTSClient(
-                            app_key=self.tts_app_key,
-                            access_key=self.tts_access_key,
-                            connection_params=connection_params,
-                        )
-                        await self.tts_client.init()
+                            connection_params = ConnectionParams(
+                                speaker=self.tts_speaker,
+                                audio_params=AudioParams()
+                            )
+                            
+                            if self.tts_cluster:
+                                connection_params.cluster = self.tts_cluster
+                            if self.tts_voice_type:
+                                connection_params.voice_type = self.tts_voice_type
+                                
+                            self.tts_client = AsyncTTSClient(
+                                app_key=self.tts_app_key,
+                                access_key=self.tts_access_key,
+                                connection_params=connection_params,
+                            )
+                            await self.tts_client.init()
                     
                     continue
                 elif input_event.event == USER_PARAMETERS and isinstance(
@@ -278,11 +305,68 @@ class VoiceBotService(BaseModel):
         """
         Handle TTS responses and generate TTS events.
         """
+        if self.use_http_tts and self.http_tts_manager:
+            # Use HTTP TTS implementation
+            async for payload in self._handle_http_tts_response(llm_output):
+                yield payload
+        else:
+            # Use WebSocket TTS implementation (fallback)
+            async for payload in self._handle_websocket_tts_response(llm_output):
+                yield payload
+    
+    async def _handle_http_tts_response(
+        self, llm_output: AsyncIterable[str]
+    ) -> AsyncIterable[
+        Union[TTSSentenceStartPayload, TTSSentenceEndPayload, TTSDonePayload]
+    ]:
+        """Handle TTS responses using HTTP client."""
+        full_text = ""
+        
+        # Collect all LLM output chunks into a single text
+        async for chunk in llm_output:
+            if chunk:
+                full_text += chunk
+        
+        if not full_text.strip():
+            INFO("[HTTP_TTS] ⚠️ No text to synthesize")
+            yield TTSDonePayload()
+            return
+        
+        # Send sentence start event
+        INFO(f"[HTTP_TTS] 🎤 Sentence start: '{full_text[:50]}{'...' if len(full_text) > 50 else ''}'")
+        yield TTSSentenceStartPayload(sentence=full_text)
+        
+        try:
+            # Synthesize the full text
+            tts_response = await self.http_tts_manager.synthesize(full_text)
+            
+            if tts_response.success and tts_response.audio_data:
+                INFO(f"[HTTP_TTS] ✅ Synthesis successful: {len(tts_response.audio_data)} bytes")
+                yield TTSSentenceEndPayload(data=tts_response.audio_data)
+            else:
+                ERROR(f"[HTTP_TTS] ❌ Synthesis failed: {tts_response.error_message}")
+                # Send empty audio data to avoid blocking the client
+                yield TTSSentenceEndPayload(data=b"")
+        
+        except Exception as e:
+            ERROR(f"[HTTP_TTS] 💥 Exception during synthesis: {str(e)}")
+            yield TTSSentenceEndPayload(data=b"")
+        
+        finally:
+            INFO("[HTTP_TTS] 🏁 TTS session finished")
+            yield TTSDonePayload()
+    
+    async def _handle_websocket_tts_response(
+        self, llm_output: AsyncIterable[str]
+    ) -> AsyncIterable[
+        Union[TTSSentenceStartPayload, TTSSentenceEndPayload, TTSDonePayload]
+    ]:
+        """Handle TTS responses using WebSocket client (original implementation)."""
         buffer = bytearray()
         total_audio_chunks = 0
         total_audio_bytes = 0
         
-        if not self.tts_client.inited:
+        if not self.tts_client or not getattr(self.tts_client, 'inited', False):
             INFO("[TTS] 🔄 Recreating TTS client")
             connection_params = ConnectionParams(
                 speaker=self.tts_speaker,
