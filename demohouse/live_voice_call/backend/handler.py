@@ -30,10 +30,10 @@ TTS_APP_ID = "{YOUR_TTS_APP_ID}"
 # replace with your ark endpoint
 LLM_ENDPOINT_ID = "{YOUR_ARK_LLM_ENDPOINT_ID}"
 # replace with your dify API access for conversation
-DIFY_API_KEY = "app-JqtJdpgiEKukUAxxT8oiJR4u"  # For conversation workflow
+DIFY_API_KEY = "{YOUR_DIFY_LLM_ENDPOINT_ID}"  # For conversation workflow
 DIFY_BASE_URL = "https://api.dify.ai"
 # Opening greeting dify API access
-DIFY_OPENING_API_KEY = "app-rCIokTn1NixIujuo4M18feAW"  # For opening greeting workflow
+DIFY_OPENING_API_KEY = "{YOUR_DIFY_LLM_ENDPOINT_ID}"  # For opening greeting workflow
 # LLM Provider: "ark" or "dify"
 LLM_PROVIDER = "dify"
 # Opening configuration
