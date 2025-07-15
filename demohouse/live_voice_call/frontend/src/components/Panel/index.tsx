@@ -38,12 +38,12 @@ export const Panel = () => {
   } = useAudioChatState();
 
   const [userParameters, setUserParameters] = useState<IUserParameters>({
-    question: '',
-    answer: '',
+    question: '3+7+8中的好朋友数是什么呀',
+    answer: '3、7',
     user_responds: '',
-    question_stem: '',
-    student_name: '',
-    question_category: '',
+    question_stem: '学校举办传统文化节，许多担任了投壶比赛的记分员，你能帮助许多快速计算出每个人的总分吗？3+7+8= 2+8+4=',
+    student_name: '果果',
+    question_category: '做题',
   });
 
   const { handleConnect } = useVoiceBotService(userParameters);
