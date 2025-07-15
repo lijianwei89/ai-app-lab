@@ -154,6 +154,22 @@ export const useVoiceBotService = (userParameters: IUserParameters) => {
               handleBotUpdateConfig();
               configNeedUpdateRef.current = false;
             }
+            break;
+          case EventType.OpeningStart:
+            log('[OPENING] 🎬 Opening generation started for: ' + payload?.student_name);
+            // Add a system message to indicate opening is starting
+            setChatMessages(prev => [
+              ...prev,
+              { role: 'bot', content: '' } // Empty bot message for opening
+            ]);
+            break;
+          case EventType.OpeningDone:
+            if (payload?.success) {
+              log('[OPENING] ✅ Opening completed successfully');
+            } else {
+              log('[OPENING] ⚠️ Opening failed: ' + (payload?.error || 'Unknown error'));
+            }
+            break;
         }
       },
     });

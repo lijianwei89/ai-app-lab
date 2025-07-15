@@ -23,7 +23,7 @@ from arkitect.core.component.tts.constants import (
     EventTTSSentenceStart,
 )
 from tts_http_client import SingletonHTTPTTSManager, TTSConfig, tts_manager
-from arkitect.telemetry.logger import INFO
+from arkitect.telemetry.logger import INFO, ERROR
 from event import *
 from prompt import VoiceBotPrompt
 from dify_client import DifyClient
@@ -31,6 +31,7 @@ import time
 
 StateInProgress = "InProgress"
 StateIdle = "Idle"
+StateOpening = "Opening"
 # asr continuous detection no input duration, empirical value
 ASRInterval = 2000
 # Default tts live_voice_call
@@ -81,6 +82,12 @@ class VoiceBotService(BaseModel):
     current_question_stem: str = ""
     current_student_name: str = ""
     current_question_category: str = ""
+    
+    # Opening related configuration
+    enable_opening: bool = True
+    opening_timeout: int = 5
+    opening_generated: bool = False
+    _should_generate_opening: bool = False
 
     class Config:
         """Configuration for this pydantic object."""
@@ -142,15 +149,80 @@ class VoiceBotService(BaseModel):
         Main loop for handling input events and generating responses.
         """
         asr_responses = await self.handle_input_event(inputs)
-        async for asr_recognized in self.handle_asr_response(asr_responses):
-            # set state into InProgress
-            self.state = StateInProgress
-            yield WebEvent.from_payload(asr_recognized)
+        
+        # Create an async iterator for handling both ASR and opening generation
+        async def combined_handler():
+            async for asr_recognized in self.handle_asr_response(asr_responses):
+                # Check if we should generate opening first
+                if self._should_generate_opening:
+                    self._should_generate_opening = False
+                    INFO("[HANDLER] 🎬 Triggering opening generation")
+                    async for opening_event in self.generate_opening():
+                        yield opening_event
+                
+                # set state into InProgress
+                self.state = StateInProgress
+                yield WebEvent.from_payload(asr_recognized)
+                
+                llm_stream_rsp = self.stream_llm_chat(asr_recognized.sentence)
+                async for payload in self.handle_tts_response(llm_stream_rsp):
+                    yield WebEvent.from_payload(payload)
+                # recreate the asr and tts client
+                self.state = StateIdle
+        
+        # Start the combined handler
+        async for event in combined_handler():
+            yield event
             
-            llm_stream_rsp = self.stream_llm_chat(asr_recognized.sentence)
-            async for payload in self.handle_tts_response(llm_stream_rsp):
-                yield WebEvent.from_payload(payload)
-            # recreate the asr and tts client
+    async def generate_opening(self) -> AsyncIterable[WebEvent]:
+        """
+        Generate opening greeting based on question and student name.
+        """
+        if not self.enable_opening or self.opening_generated:
+            return
+        
+        if not self.current_question or not self.current_student_name:
+            INFO("[OPENING] ⚠️ Missing required parameters for opening generation")
+            return
+            
+        INFO(f"[OPENING] 🎬 Starting opening generation for student: {self.current_student_name}")
+        
+        # Set state to Opening
+        self.state = StateOpening
+        self.opening_generated = True
+        
+        # Send opening start event
+        yield WebEvent.from_payload(OpeningStartPayload(
+            question=self.current_question,
+            student_name=self.current_student_name
+        ))
+        
+        try:
+            # Generate opening text using Dify workflow
+            opening_text = await self._generate_opening_text()
+            
+            if opening_text:
+                # Convert opening text to speech
+                async for payload in self.handle_tts_response(self._async_text_generator(opening_text)):
+                    yield WebEvent.from_payload(payload)
+                    
+                # Send opening done event
+                yield WebEvent.from_payload(OpeningDonePayload(success=True))
+                INFO(f"[OPENING] ✅ Opening generation completed successfully")
+            else:
+                # Use default opening if generation fails
+                default_opening = f"你好{self.current_student_name}，我是你的学习助手乔青青，让我们一起来解决这个问题吧！"
+                async for payload in self.handle_tts_response(self._async_text_generator(default_opening)):
+                    yield WebEvent.from_payload(payload)
+                yield WebEvent.from_payload(OpeningDonePayload(success=False, error="Using default opening"))
+                INFO(f"[OPENING] ⚠️ Using default opening due to generation failure")
+                
+        except Exception as e:
+            INFO(f"[OPENING] ❌ Opening generation failed: {str(e)}")
+            yield WebEvent.from_payload(OpeningDonePayload(success=False, error=str(e)))
+        
+        finally:
+            # Return to idle state
             self.state = StateIdle
 
     async def handle_input_event(
@@ -167,6 +239,7 @@ class VoiceBotService(BaseModel):
                     INFO(
                         f"[EVENT_RECEIVED] 📨 {input_event.event} | payload_type={type(input_event.payload).__name__}"
                     )
+                
                 
                 # Handle configuration events even when service is InProgress
                 if input_event.event == BOT_UPDATE_CONFIG and isinstance(
@@ -244,10 +317,18 @@ class VoiceBotService(BaseModel):
                     INFO(f"  📋 question_stem: '{self.current_question_stem}'")
                     INFO(f"  👤 student_name: '{self.current_student_name}'")
                     INFO(f"  🏷️ question_category: '{self.current_question_category}'")
+                    
+                    # Check if we should trigger opening generation
+                    if (self.enable_opening and not self.opening_generated and 
+                        self.current_question and self.current_student_name and 
+                        self.state == StateIdle):
+                        INFO("[PARAM_RECEIVED] 🎬 Parameters complete, will generate opening")
+                        self._should_generate_opening = True
+                    
                     continue
                 
-                # For audio processing, check if service is busy
-                if self.state != StateIdle:
+                # For audio processing, check if service is busy (including Opening state)
+                if self.state not in [StateIdle]:
                     INFO(f"[AUDIO_BLOCKED] 🚫 Service is {self.state}, ignoring audio input")
                     continue
                 elif not self.asr_client.inited:
@@ -527,3 +608,53 @@ class VoiceBotService(BaseModel):
             self.history_messages.append(
                 ArkMessage(**{"role": "assistant", "content": completion_buffer})
             )
+    
+    async def _generate_opening_text(self) -> str:
+        """
+        Generate opening text using Dify workflow.
+        """
+        if not self.dify_client:
+            INFO("[OPENING] ⚠️ Dify client not available, using default opening")
+            return ""
+        
+        try:
+            # Prepare inputs for opening generation
+            inputs = {
+                "question": self.current_question,
+                "student_name": self.current_student_name,
+            }
+            
+            INFO(f"[OPENING] 🚀 Generating opening with inputs: {inputs}")
+            
+            opening_text = ""
+            async for chunk in self.dify_client.stream_workflow_run(
+                inputs=inputs,
+                user_id=f"opening-{self.current_student_name or 'anonymous'}"
+            ):
+                if chunk:
+                    opening_text += chunk
+            
+            INFO(f"[OPENING] ✅ Generated opening text: '{opening_text}'")
+            return opening_text.strip()
+            
+        except Exception as e:
+            INFO(f"[OPENING] ❌ Failed to generate opening: {str(e)}")
+            return ""
+    
+    async def _async_text_generator(self, text: str) -> AsyncIterable[str]:
+        """
+        Convert a single text string into an async generator for TTS processing.
+        """
+        yield text
+        
+    def should_generate_opening(self) -> bool:
+        """
+        Check if opening should be generated based on current state and parameters.
+        """
+        return (
+            self.enable_opening and 
+            not self.opening_generated and 
+            bool(self.current_question) and 
+            bool(self.current_student_name) and 
+            self.state == StateIdle
+        )

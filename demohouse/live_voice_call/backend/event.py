@@ -27,6 +27,8 @@ BOT_ERROR = "BotError"
 CONNECTION_CLOSED = "ConnectionClosed"
 DIFY_REQUEST = "DifyRequest"
 DIFY_RESPONSE = "DifyResponse"
+OPENING_START = "OpeningStart"
+OPENING_DONE = "OpeningDone"
 
 
 class WebPayload(ABC):
@@ -181,6 +183,32 @@ class DifyResponsePayload(WebPayload, BaseModel):
     timestamp: str
 
 
+class OpeningStartPayload(WebPayload, BaseModel):
+    """
+    Payload for the OpeningStart event.
+
+    Attributes:
+        question (str): The question/scenario for the opening.
+        student_name (str): The student's name.
+    """
+
+    question: str
+    student_name: str
+
+
+class OpeningDonePayload(WebPayload, BaseModel):
+    """
+    Payload for the OpeningDone event.
+
+    Attributes:
+        success (bool): Whether the opening was successful.
+        error (Optional[str]): Error message if any.
+    """
+
+    success: bool
+    error: Optional[str] = None
+
+
 # Define WebEvent
 class WebEvent(BaseModel):
     """
@@ -235,5 +263,9 @@ class WebEvent(BaseModel):
             return cls(event=DIFY_REQUEST, payload=payload)
         elif isinstance(payload, DifyResponsePayload):
             return cls(event=DIFY_RESPONSE, payload=payload)
+        elif isinstance(payload, OpeningStartPayload):
+            return cls(event=OPENING_START, payload=payload)
+        elif isinstance(payload, OpeningDonePayload):
+            return cls(event=OPENING_DONE, payload=payload)
         else:
             raise ValueError("Invalid payload type")

@@ -48,6 +48,9 @@ class DifyClient:
         """
         Stream workflow run with Dify API.
         
+        This method supports both regular conversation workflows and opening generation workflows.
+        For opening generation, the inputs should contain 'question' and 'student_name'.
+        
         Args:
             inputs (Dict[str, Any]): Input variables for the workflow
             user_id (Optional[str]): User ID for the request
@@ -89,6 +92,8 @@ class DifyClient:
                         raise Exception(f"Dify API error: {response.status_code}")
                     
                     buffer = ""
+                    llm_output = None  # Store LLM node output as fallback
+                    
                     async for chunk in response.aiter_text():
                         buffer += chunk
                         # Process Server-Sent Events format
@@ -100,6 +105,9 @@ class DifyClient:
                             if line.startswith('data: '):
                                 data = line[6:]  # Remove 'data: ' prefix
                                 if data == '[DONE]':
+                                    # If we reach the end and have stored LLM output but no final result, yield it
+                                    if llm_output:
+                                        yield llm_output
                                     return
                                 if data:
                                     try:
@@ -108,32 +116,50 @@ class DifyClient:
                                         
                                         # Handle different event types
                                         if event_data.get('event') == 'text_chunk':
-                                            # Extract text content from workflow response
+                                            # Extract text content from workflow response (for streaming workflows)
                                             if 'data' in event_data:
                                                 text = event_data['data'].get('text', '')
                                                 if text:
                                                     yield text
                                         elif event_data.get('event') == 'workflow_finished':
-                                            # Extract final output from 'result' field specifically
+                                            # Extract final output from 'result' field specifically (non-streaming)
                                             if 'data' in event_data and 'outputs' in event_data['data']:
                                                 outputs = event_data['data']['outputs']
                                                 # Prioritize 'result' field first as it contains the correct answer
                                                 if 'result' in outputs and isinstance(outputs['result'], str) and outputs['result'].strip():
                                                     yield outputs['result']
+                                                    return  # Exit after getting the final result
                                                 else:
-                                                    # Fallback to other fields if 'result' is not available
+                                                    # Check for other output fields in workflow_finished
                                                     for key, value in outputs.items():
                                                         if isinstance(value, str) and value.strip():
                                                             yield value
-                                                            break
+                                                            return  # Exit after getting any result
+                                            
+                                            # If workflow_finished has no valid outputs, use stored LLM output
+                                            if llm_output:
+                                                yield llm_output
+                                                return
+                                                
                                         elif event_data.get('event') == 'node_finished':
-                                            # Extract node output if it contains text
+                                            # Extract node output if it contains text (as intermediate processing)
                                             if 'data' in event_data and 'outputs' in event_data['data']:
                                                 outputs = event_data['data']['outputs']
-                                                for key, value in outputs.items():
-                                                    if isinstance(value, str) and value.strip():
-                                                        yield value
-                                                        break
+                                                # Check if this is an LLM node with text output
+                                                node_data = event_data.get('data', {})
+                                                node_type = node_data.get('node_type', '')
+                                                
+                                                if node_type == 'llm' and 'text' in outputs and isinstance(outputs['text'], str) and outputs['text'].strip():
+                                                    # Clean up the text (remove thinking tags if present)
+                                                    import re
+                                                    text = outputs['text']
+                                                    # Remove <think>...</think> tags
+                                                    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+                                                    if text:
+                                                        # Store as potential result for use if workflow_finished is empty
+                                                        llm_output = text
+                                                        INFO(f"Stored LLM output as fallback: {text}")
+                                                        
                                         elif event_data.get('event') == 'error':
                                             error_msg = event_data.get('message', 'Unknown error')
                                             ERROR(f"Dify workflow error: {error_msg}")
