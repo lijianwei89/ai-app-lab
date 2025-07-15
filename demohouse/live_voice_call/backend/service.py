@@ -47,7 +47,9 @@ class VoiceBotService(BaseModel):
     tts_client: Optional[AsyncTTSClient] = None
     llm_ep_id: str
     state: str = StateIdle
-    tts_speaker: str = DEFAULT_SPEAKER  # TTS live_voice_call
+    tts_speaker: str = DEFAULT_SPEAKER  # TTS speaker
+    tts_cluster: Optional[str] = None  # TTS cluster for load balancing
+    tts_voice_type: Optional[str] = None  # TTS voice type
 
     """
     config vars
@@ -86,12 +88,21 @@ class VoiceBotService(BaseModel):
         """
         Initialize the TTS, ASR, and LLM clients.
         """
+        connection_params = ConnectionParams(
+            speaker=self.tts_speaker, 
+            audio_params=AudioParams()
+        )
+        
+        # Add cluster and voice_type if provided
+        if self.tts_cluster:
+            connection_params.cluster = self.tts_cluster
+        if self.tts_voice_type:
+            connection_params.voice_type = self.tts_voice_type
+            
         self.tts_client = AsyncTTSClient(
             app_key=self.tts_app_key,
             access_key=self.tts_access_key,
-            connection_params=ConnectionParams(
-                speaker=self.tts_speaker, audio_params=AudioParams()
-            ),
+            connection_params=connection_params,
         )
         self.asr_client = AsyncASRClient(
             app_key=self.asr_app_key, access_key=self.asr_access_key
@@ -144,8 +155,49 @@ class VoiceBotService(BaseModel):
                 if input_event.event == BOT_UPDATE_CONFIG and isinstance(
                     input_event.payload, BotUpdateConfigPayload
                 ):
-                    INFO(f"[CONFIG] 🔧 Updating TTS speaker: {input_event.payload.speaker}")
-                    self.tts_speaker = input_event.payload.speaker
+                    config_updated = False
+                    
+                    # Update speaker if provided
+                    if input_event.payload.speaker is not None:
+                        INFO(f"[CONFIG] 🔧 Updating TTS speaker: {input_event.payload.speaker}")
+                        self.tts_speaker = input_event.payload.speaker
+                        config_updated = True
+                    
+                    # Update cluster if provided
+                    if input_event.payload.cluster is not None:
+                        INFO(f"[CONFIG] 🔧 Updating TTS cluster: {input_event.payload.cluster}")
+                        self.tts_cluster = input_event.payload.cluster
+                        config_updated = True
+                    
+                    # Update voice_type if provided
+                    if input_event.payload.voice_type is not None:
+                        INFO(f"[CONFIG] 🔧 Updating TTS voice_type: {input_event.payload.voice_type}")
+                        self.tts_voice_type = input_event.payload.voice_type
+                        config_updated = True
+                    
+                    # Reinitialize TTS client if any config was updated
+                    if config_updated:
+                        INFO("[CONFIG] 🔄 Reinitializing TTS client with new configuration")
+                        if self.tts_client and self.tts_client.inited:
+                            await self.tts_client.close()
+                        
+                        connection_params = ConnectionParams(
+                            speaker=self.tts_speaker,
+                            audio_params=AudioParams()
+                        )
+                        
+                        if self.tts_cluster:
+                            connection_params.cluster = self.tts_cluster
+                        if self.tts_voice_type:
+                            connection_params.voice_type = self.tts_voice_type
+                            
+                        self.tts_client = AsyncTTSClient(
+                            app_key=self.tts_app_key,
+                            access_key=self.tts_access_key,
+                            connection_params=connection_params,
+                        )
+                        await self.tts_client.init()
+                    
                     continue
                 elif input_event.event == USER_PARAMETERS and isinstance(
                     input_event.payload, UserParametersPayload
@@ -232,6 +284,21 @@ class VoiceBotService(BaseModel):
         
         if not self.tts_client.inited:
             INFO("[TTS] 🔄 Recreating TTS client")
+            connection_params = ConnectionParams(
+                speaker=self.tts_speaker,
+                audio_params=AudioParams()
+            )
+            
+            if self.tts_cluster:
+                connection_params.cluster = self.tts_cluster
+            if self.tts_voice_type:
+                connection_params.voice_type = self.tts_voice_type
+                
+            self.tts_client = AsyncTTSClient(
+                app_key=self.tts_app_key,
+                access_key=self.tts_access_key,
+                connection_params=connection_params,
+            )
             await self.tts_client.init()
             
         async for tts_rsp in self.tts_client.tts(

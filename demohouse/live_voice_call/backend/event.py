@@ -69,9 +69,13 @@ class BotUpdateConfigPayload(WebPayload, BaseModel):
 
     Attributes:
         speaker (Optional[str]): The speaker ID.
+        cluster (Optional[str]): The TTS cluster for load balancing.
+        voice_type (Optional[str]): The voice type for TTS.
     """
 
     speaker: Optional[str] = None
+    cluster: Optional[str] = None
+    voice_type: Optional[str] = None
 
 
 class UserParametersPayload(WebPayload, BaseModel):
