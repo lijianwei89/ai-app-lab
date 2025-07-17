@@ -67,6 +67,10 @@ class VoiceBotService(BaseModel):
     dify_api_key: Optional[str] = None
     dify_base_url: str = "https://api.dify.ai"
     dify_client: Optional[DifyClient] = None
+    
+    # Opening greeting Dify configuration
+    dify_opening_api_key: Optional[str] = None
+    dify_opening_client: Optional[DifyClient] = None
 
     history_messages: List[ArkMessage] = []  # Store historical dialogue information
 
@@ -134,6 +138,14 @@ class VoiceBotService(BaseModel):
                 base_url=self.dify_base_url
             )
             INFO(f"Initialized Dify client with base URL: {self.dify_base_url}")
+        
+        # Initialize opening greeting Dify client if provided
+        if self.dify_opening_api_key:
+            self.dify_opening_client = DifyClient(
+                api_key=self.dify_opening_api_key,
+                base_url=self.dify_base_url
+            )
+            INFO(f"Initialized opening greeting Dify client with base URL: {self.dify_base_url}")
 
     async def handler_loop(
         self, inputs: AsyncIterable[WebEvent]
@@ -527,3 +539,45 @@ class VoiceBotService(BaseModel):
             self.history_messages.append(
                 ArkMessage(**{"role": "assistant", "content": completion_buffer})
             )
+    
+    async def get_opening_greeting(self) -> str:
+        """
+        Get opening greeting text from Dify workflow.
+        
+        Returns:
+            str: Opening greeting text
+        """
+        if not self.dify_opening_client:
+            raise ValueError("Opening greeting Dify client not initialized")
+        
+        INFO(f"[OPENING_GREETING] 🚀 Requesting opening greeting from Dify")
+        
+        # Prepare inputs for opening greeting (can be empty for opening greeting)
+        inputs = {
+            "student_name": self.current_student_name or "同学",
+        }
+        
+        INFO(f"[OPENING_GREETING] 📝 Sending inputs: {inputs}")
+        
+        completion_buffer = ""
+        final_result = ""
+        
+        try:
+            async for chunk in self.dify_opening_client.stream_workflow_run(
+                inputs=inputs,
+                user_id=f"opening-{self.current_student_name or 'anonymous'}"
+            ):
+                if chunk:
+                    final_result = chunk
+                    completion_buffer += chunk
+            
+            # Return the final result
+            result = final_result if final_result else completion_buffer
+            INFO(f"[OPENING_GREETING] ✅ Got opening greeting: {result}")
+            return result
+                    
+        except Exception as e:
+            error_msg = f"获取开场白失败：{str(e)}"
+            INFO(f"[OPENING_GREETING] ❌ Error: {error_msg}")
+            # Return a fallback greeting
+            return f"你好{self.current_student_name or '同学'}，我是你的AI助手！"

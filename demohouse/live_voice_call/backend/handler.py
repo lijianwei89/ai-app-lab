@@ -12,6 +12,7 @@
 import asyncio
 import logging
 import uuid
+import time
 from typing import AsyncIterable
 
 import websockets
@@ -20,6 +21,7 @@ from arkitect.telemetry.logger import INFO
 from arkitect.utils.event_loop import get_event_loop
 from service import VoiceBotService, LLMProvider
 from utils import *
+from event import OpeningGreetingResponsePayload, WebEvent
 
 # replace with your asr API access
 ASR_ACCESS_TOKEN = "{YOUR_ASR_ACCESS_TOKEN}"
@@ -32,6 +34,8 @@ LLM_ENDPOINT_ID = "{YOUR_ARK_LLM_ENDPOINT_ID}"
 # replace with your dify API access
 DIFY_API_KEY = "app-JqtJdpgiEKukUAxxT8oiJR4u"
 DIFY_BASE_URL = "https://api.dify.ai"
+# Opening greeting dify API access
+DIFY_OPENING_API_KEY = "app-rCIokTn1NixIujuo4M18feAW"
 # LLM Provider: "ark" or "dify"
 LLM_PROVIDER = "dify"
 
@@ -59,6 +63,8 @@ async def handler(websocket: websockets.WebSocketCommonProtocol, path):
         llm_provider=LLMProvider.DIFY if LLM_PROVIDER == "dify" else LLMProvider.ARK,
         dify_api_key=DIFY_API_KEY if LLM_PROVIDER == "dify" else None,
         dify_base_url=DIFY_BASE_URL,
+        # Opening greeting Dify configuration
+        dify_opening_api_key=DIFY_OPENING_API_KEY,
         # Enable HTTP TTS with cluster and voice_type support
         use_http_tts=True,
         tts_cluster="volcano_icl",
@@ -91,6 +97,48 @@ async def handler(websocket: websockets.WebSocketCommonProtocol, path):
                 INFO(
                     f"[INPUT] 📥 {input_event.event} | data_len:{len(input_event.data) if input_event.data else 0}"
                 )
+            
+            # Handle opening greeting request directly
+            if input_event.event == "OpeningGreetingRequest":
+                INFO(f"[OPENING_GREETING] 📨 Received opening greeting request")
+                try:
+                    greeting_text = await service.get_opening_greeting()
+                    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # Send the greeting text response
+                    response_payload = OpeningGreetingResponsePayload(
+                        text=greeting_text,
+                        success=True,
+                        timestamp=timestamp
+                    )
+                    response_event = WebEvent.from_payload(response_payload)
+                    INFO(f"[OPENING_GREETING] ✅ Sending response: {greeting_text}")
+                    await ws.send(convert_web_event_to_binary(response_event))
+                    
+                    # Also send the greeting through TTS pipeline
+                    async def greeting_text_generator():
+                        yield greeting_text
+                    
+                    # Process TTS for opening greeting
+                    tts_payloads = service.handle_tts_response(greeting_text_generator())
+                    async for tts_payload in tts_payloads:
+                        tts_event = WebEvent.from_payload(tts_payload)
+                        await ws.send(convert_web_event_to_binary(tts_event))
+                        
+                except Exception as e:
+                    error_msg = str(e)
+                    INFO(f"[OPENING_GREETING] ❌ Error: {error_msg}")
+                    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                    response_payload = OpeningGreetingResponsePayload(
+                        text=f"获取开场白失败：{error_msg}",
+                        success=False,
+                        error=error_msg,
+                        timestamp=timestamp
+                    )
+                    response_event = WebEvent.from_payload(response_payload)
+                    await ws.send(convert_web_event_to_binary(response_event))
+                continue
+            
             yield input_event
 
     async def fetch_output(

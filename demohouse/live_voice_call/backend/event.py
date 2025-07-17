@@ -27,6 +27,8 @@ BOT_ERROR = "BotError"
 CONNECTION_CLOSED = "ConnectionClosed"
 DIFY_REQUEST = "DifyRequest"
 DIFY_RESPONSE = "DifyResponse"
+OPENING_GREETING_REQUEST = "OpeningGreetingRequest"
+OPENING_GREETING_RESPONSE = "OpeningGreetingResponse"
 
 
 class WebPayload(ABC):
@@ -181,6 +183,33 @@ class DifyResponsePayload(WebPayload, BaseModel):
     timestamp: str
 
 
+class OpeningGreetingRequestPayload(WebPayload, BaseModel):
+    """
+    Payload for the OpeningGreetingRequest event.
+
+    This event is sent from client to server to request opening greeting.
+    """
+
+    pass
+
+
+class OpeningGreetingResponsePayload(WebPayload, BaseModel):
+    """
+    Payload for the OpeningGreetingResponse event.
+
+    Attributes:
+        text (str): The opening greeting text.
+        success (bool): Whether the request was successful.
+        error (Optional[str]): Error message if any.
+        timestamp (str): The timestamp of the response.
+    """
+
+    text: str
+    success: bool
+    error: Optional[str] = None
+    timestamp: str
+
+
 # Define WebEvent
 class WebEvent(BaseModel):
     """
@@ -235,5 +264,9 @@ class WebEvent(BaseModel):
             return cls(event=DIFY_REQUEST, payload=payload)
         elif isinstance(payload, DifyResponsePayload):
             return cls(event=DIFY_RESPONSE, payload=payload)
+        elif isinstance(payload, OpeningGreetingRequestPayload):
+            return cls(event=OPENING_GREETING_REQUEST, payload=payload)
+        elif isinstance(payload, OpeningGreetingResponsePayload):
+            return cls(event=OPENING_GREETING_RESPONSE, payload=payload)
         else:
             raise ValueError("Invalid payload type")

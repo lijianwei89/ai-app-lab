@@ -16,7 +16,7 @@ import { useAudioChatState } from '@/components/AudioChatProvider/hooks/useAudio
 import { useLogContent } from '@/components/AudioChatServiceProvider/hooks/useLogContent';
 import { useAudioRecorder } from '@/components/AudioChatServiceProvider/hooks/useAudioRecorder';
 import VoiceBotService from '@/utils/voice_bot_service';
-import { EventType, IUserParameters } from '@/types';
+import { EventType, IUserParameters, IOpeningGreetingResponse } from '@/types';
 import { useSpeakerConfig } from '@/components/AudioChatServiceProvider/hooks/useSpeakerConfig';
 import { useMessageList } from '@/components/AudioChatProvider/hooks/useMessageList';
 import { useSyncRef } from '@/hooks/useSyncRef';
@@ -154,12 +154,38 @@ export const useVoiceBotService = (userParameters: IUserParameters) => {
               handleBotUpdateConfig();
               configNeedUpdateRef.current = false;
             }
+            break;
+          case EventType.OpeningGreetingResponse:
+            const greetingResponse = payload as IOpeningGreetingResponse;
+            if (greetingResponse.success) {
+              // Add opening greeting to chat messages
+              setChatMessages(prev => [
+                ...prev,
+                { role: 'bot', content: greetingResponse.text },
+              ]);
+              // Note: TTS for opening greeting will be handled by the backend 
+              // through TTSSentenceStart event, so we don't need to trigger it here
+              log(`[OPENING_GREETING] ✅ Received: ${greetingResponse.text}`);
+            } else {
+              log(`[OPENING_GREETING] ❌ Error: ${greetingResponse.error}`);
+              Message.error('获取开场白失败');
+            }
+            break;
         }
       },
     });
   }, [wsUrl]);
 
+  const handleOpeningGreeting = () => {
+    if (!serviceRef.current) {
+      return;
+    }
+    serviceRef.current.sendOpeningGreetingRequest();
+    log('send | event:' + EventType.OpeningGreetingRequest);
+  };
+
   return {
     handleConnect,
+    handleOpeningGreeting,
   };
 };

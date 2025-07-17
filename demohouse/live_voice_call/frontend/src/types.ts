@@ -23,6 +23,13 @@ export interface IUserParameters {
   question_category: string;
 }
 
+export interface IOpeningGreetingResponse {
+  text: string;
+  success: boolean;
+  error?: string;
+  timestamp: string;
+}
+
 export type WebResponse = {
   event: string;
   payload?: Record<string, any>;
@@ -49,6 +56,8 @@ export enum EventType {
   UserParameters = 'UserParameters',
   DifyRequest = 'DifyRequest',
   DifyResponse = 'DifyResponse',
+  OpeningGreetingRequest = 'OpeningGreetingRequest',
+  OpeningGreetingResponse = 'OpeningGreetingResponse',
 }
 export interface IWebSocketResponse {
   messageType: number;

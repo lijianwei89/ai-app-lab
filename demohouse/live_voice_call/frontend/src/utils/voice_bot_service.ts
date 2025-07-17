@@ -58,6 +58,14 @@ export default class VoiceBotService {
     this.ws?.send(data);
   }
 
+  public sendOpeningGreetingRequest() {
+    const message: WebRequest = {
+      event: 'OpeningGreetingRequest',
+      payload: {}
+    };
+    this.sendMessage(message);
+  }
+
   // 接收消息
   public onMessage(e: MessageEvent<any>) {
     try {

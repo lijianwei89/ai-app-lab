@@ -46,7 +46,7 @@ export const Panel = () => {
     question_category: '做题',
   });
 
-  const { handleConnect } = useVoiceBotService(userParameters);
+  const { handleConnect, handleOpeningGreeting } = useVoiceBotService(userParameters);
   const { currentBotSentence, currentUserSentence } = useCurrentSentence();
 
   const { recStart, recStop } = useAudioRecorder();
@@ -72,6 +72,13 @@ export const Panel = () => {
             }}
           >
             连接
+          </Button>
+          <Button 
+            disabled={!wsConnected} 
+            onClick={handleOpeningGreeting}
+            type="primary"
+          >
+            开场白
           </Button>
           <Button disabled={!wsConnected} onClick={recStart}>
             打电话
