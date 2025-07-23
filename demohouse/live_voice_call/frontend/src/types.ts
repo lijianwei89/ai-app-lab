@@ -58,6 +58,8 @@ export enum EventType {
   DifyResponse = 'DifyResponse',
   OpeningGreetingRequest = 'OpeningGreetingRequest',
   OpeningGreetingResponse = 'OpeningGreetingResponse',
+  OpeningStart = 'OpeningStart',
+  OpeningDone = 'OpeningDone',
 }
 export interface IWebSocketResponse {
   messageType: number;
