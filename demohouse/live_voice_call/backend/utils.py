@@ -21,6 +21,7 @@ from arkitect.utils.binary_protocol import (
     parse_request,
 )
 from event import *
+from event import OPENING_GREETING_REQUEST
 
 
 def json_payload_to_binary_response(event: WebEvent) -> bytes:
@@ -132,6 +133,10 @@ def convert_binary_to_web_event_to_binary(data: bytes) -> WebEvent:
             elif event_type == BOT_UPDATE_CONFIG:
                 from event import BotUpdateConfigPayload
                 payload = BotUpdateConfigPayload(**payload_data)
+                web_event = WebEvent(event=event_type, payload=payload)
+            elif event_type == OPENING_GREETING_REQUEST:
+                from event import OpeningGreetingRequestPayload
+                payload = OpeningGreetingRequestPayload()
                 web_event = WebEvent(event=event_type, payload=payload)
             else:
                 # For other events, try direct parsing

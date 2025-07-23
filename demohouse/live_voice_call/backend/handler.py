@@ -24,13 +24,13 @@ from utils import *
 from event import OpeningGreetingResponsePayload, WebEvent
 
 # replace with your asr API access
-ASR_ACCESS_TOKEN = "{YOUR_ASR_ACCESS_TOKEN}"
-ASR_APP_ID = "{YOUR_ASR_ACCESS_TOKEN}"
+ASR_ACCESS_TOKEN = "WDubf8FD7TunKdtBdzMnmLRuEzvximVu"
+ASR_APP_ID = "3735242956"
 # replace with your tts API access
-TTS_ACCESS_TOKEN = "{YOUR_ASR_ACCESS_TOKEN}"
-TTS_APP_ID = "{YOUR_TTS_APP_ID}"
+TTS_ACCESS_TOKEN = "WDubf8FD7TunKdtBdzMnmLRuEzvximVu"
+TTS_APP_ID = "3735242956"
 # replace with your ark endpoint
-LLM_ENDPOINT_ID = "{YOUR_ARK_LLM_ENDPOINT_ID}"
+LLM_ENDPOINT_ID = "doubao-seed-1-6-250615"
 # replace with your dify API access
 DIFY_API_KEY = "app-JqtJdpgiEKukUAxxT8oiJR4u"
 DIFY_BASE_URL = "https://api.dify.ai"

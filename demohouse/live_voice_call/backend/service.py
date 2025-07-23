@@ -551,10 +551,17 @@ class VoiceBotService(BaseModel):
             raise ValueError("Opening greeting Dify client not initialized")
         
         INFO(f"[OPENING_GREETING] 🚀 Requesting opening greeting from Dify")
+        INFO(f"[OPENING_GREETING] 📡 Using Dify API key: {self.dify_opening_api_key[:10]}...")  # Log first 10 chars for debugging
+        
+        # Log current parameter values for debugging
+        INFO(f"[OPENING_GREETING] 📊 Current parameter values:")
+        INFO(f"  📝 question: '{self.current_question}' (len: {len(self.current_question) if self.current_question else 0})")
+        INFO(f"  👤 student_name: '{self.current_student_name}' (len: {len(self.current_student_name) if self.current_student_name else 0})")
         
         # Prepare inputs for opening greeting (can be empty for opening greeting)
         inputs = {
             "student_name": self.current_student_name or "同学",
+            "question": self.current_question or "问题",
         }
         
         INFO(f"[OPENING_GREETING] 📝 Sending inputs: {inputs}")
