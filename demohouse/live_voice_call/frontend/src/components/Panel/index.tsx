@@ -12,9 +12,12 @@
 import {
   Button,
   Descriptions,
-  Input,
+  Select,
   Typography,
 } from '@arco-design/web-react';
+import { CustomInput } from '@/components/CustomInput';
+
+const { Option } = Select;
 
 import { useAudioChatState } from '@/components/AudioChatProvider/hooks/useAudioChatState';
 
@@ -37,14 +40,148 @@ export const Panel = () => {
     botAudioPlaying,
   } = useAudioChatState();
 
-  const [userParameters, setUserParameters] = useState<IUserParameters>({
-    question: '3+7+8中的好朋友数是什么呀',
-    answer: '3、7',
-    user_responds: '',
-    question_stem: '学校举办传统文化节，许多担任了投壶比赛的记分员，你能帮助许多快速计算出每个人的总分吗？3+7+8= 2+8+4=',
-    student_name: '果果',
-    question_category: '做题',
+  // 预设参数分组
+  const defaultPresetParameters = {
+    '数学-好朋友数': {
+      question: '3+7+8中的好朋友数是什么呀',
+      answer: '3、7',
+      user_responds: '',
+      question_stem: '学校举办传统文化节，许多担任了投壶比赛的记分员，你能帮助许多快速计算出每个人的总分吗？3+7+8= 2+8+4=',
+      student_name: '果果',
+      question_category: '做题',
+    },
+  };
+
+  const [presetParameters, setPresetParameters] = useState<Record<string, IUserParameters>>(() => {
+    const savedPresets = localStorage.getItem('userParameterPresets');
+    return savedPresets ? JSON.parse(savedPresets) : defaultPresetParameters;
   });
+  const [selectedPreset, setSelectedPreset] = useState<string>('数学-好朋友数');
+  const [userParameters, setUserParameters] = useState<IUserParameters>(
+    () => {
+      const savedPresets = localStorage.getItem('userParameterPresets');
+      const presets = savedPresets ? JSON.parse(savedPresets) : defaultPresetParameters;
+      return presets['数学-好朋友数'];
+    }
+  );
+  
+  // 计算自定义预设数量（排除默认预设）
+  const getCustomPresetCount = () => {
+    const defaultKeys = Object.keys(defaultPresetParameters);
+    return Object.keys(presetParameters).filter(key => !defaultKeys.includes(key)).length;
+  };
+  
+  // 处理预设参数选择变化
+  const handlePresetChange = (value: string) => {
+    setSelectedPreset(value);
+    setUserParameters(presetParameters[value]);
+  };
+  
+  // 保存当前参数为新预设
+  const saveCurrentAsPreset = () => {
+    // 检查是否已达到最大自定义预设数量
+    if (getCustomPresetCount() >= 10) {
+      alert('最多只能创建10个自定义预设！');
+      return;
+    }
+    
+    const presetName = prompt('请输入预设名称:');
+    if (presetName) {
+      // 检查预设名称是否已存在
+      if (presetParameters[presetName]) {
+        const confirmOverwrite = confirm(`预设 "${presetName}" 已存在，是否覆盖?`);
+        if (!confirmOverwrite) return;
+      }
+      
+      const newPresets = {
+        ...presetParameters,
+        [presetName]: userParameters
+      };
+      setPresetParameters(newPresets);
+      localStorage.setItem('userParameterPresets', JSON.stringify(newPresets));
+      setSelectedPreset(presetName);
+      alert(`预设 "${presetName}" 已保存`);
+    }
+  };
+  
+  // 重命名当前预设
+  const renameCurrentPreset = () => {
+    // 检查是否是默认预设
+    if (Object.keys(defaultPresetParameters).includes(selectedPreset)) {
+      alert('不能重命名默认预设！');
+      return;
+    }
+    
+    const newName = prompt('请输入新的预设名称:', selectedPreset);
+    if (newName && newName !== selectedPreset) {
+      // 检查新名称是否已存在
+      if (presetParameters[newName]) {
+        alert(`预设 "${newName}" 已存在！`);
+        return;
+      }
+      
+      // 重命名预设
+      const newPresets = { ...presetParameters };
+      newPresets[newName] = newPresets[selectedPreset];
+      delete newPresets[selectedPreset];
+      
+      setPresetParameters(newPresets);
+      localStorage.setItem('userParameterPresets', JSON.stringify(newPresets));
+      setSelectedPreset(newName);
+      alert(`预设已重命名为 "${newName}"`);
+    }
+  };
+  
+  // 删除当前预设
+  const deleteCurrentPreset = () => {
+    // 检查是否是默认预设
+    if (Object.keys(defaultPresetParameters).includes(selectedPreset)) {
+      alert('不能删除默认预设！');
+      return;
+    }
+    
+    const confirmDelete = confirm(`确定要删除预设 "${selectedPreset}" 吗?`);
+    if (confirmDelete) {
+      const newPresets = { ...presetParameters };
+      delete newPresets[selectedPreset];
+      
+      setPresetParameters(newPresets);
+      localStorage.setItem('userParameterPresets', JSON.stringify(newPresets));
+      
+      // 选择第一个预设作为默认选择
+      const firstPreset = Object.keys(newPresets)[0];
+      setSelectedPreset(firstPreset);
+      setUserParameters(newPresets[firstPreset]);
+      alert(`预设 "${selectedPreset}" 已删除`);
+    }
+  };
+  
+  // 更新参数时同时更新当前预设
+  const updateUserParameters = (updater: (prev: IUserParameters) => IUserParameters) => {
+    const updatedParams = updater(userParameters);
+    setUserParameters(updatedParams);
+    
+    // 如果当前选择的预设与当前参数不匹配，则设置为自定义
+    const currentPreset = Object.keys(presetParameters).find(
+      key => JSON.stringify(presetParameters[key]) === JSON.stringify(updatedParams)
+    );
+    
+    if (!currentPreset && selectedPreset !== '自定义') {
+      // 参数已被修改，设置为自定义
+      const newPresets = {
+        ...presetParameters,
+        '自定义': updatedParams
+      };
+      setPresetParameters(newPresets);
+      localStorage.setItem('userParameterPresets', JSON.stringify(newPresets));
+      setSelectedPreset('自定义');
+    }
+  };
+  
+  // 修改单个参数的处理函数
+  const handleParameterChange = (field: keyof IUserParameters, value: string) => {
+    updateUserParameters(prev => ({ ...prev, [field]: value }));
+  };
 
   const { handleConnect, handleOpeningGreeting } = useVoiceBotService(userParameters);
   const { currentBotSentence, currentUserSentence } = useCurrentSentence();
@@ -60,10 +197,10 @@ export const Panel = () => {
     <div className={'flex flex-col gap-4'}>
       <div className={'w-[650px] flex flex-col gap-4'}>
         <div className={'flex gap-2'}>
-          <Input
-            prefix={<div className={'bg-white'}>ws_url</div>}
+          <CustomInput
+            inputPrefix={<div className={'bg-white'}>ws_url</div>}
             value={draftWsUrl}
-            onChange={setDraftWsUrl}
+            onChange={(e) => setDraftWsUrl(e.target.value)}
           />
           <Button
             onClick={() => {
@@ -124,31 +261,48 @@ export const Panel = () => {
         />
         <div className="flex flex-col gap-2">
           <div className="font-semibold">用户参数设置</div>
+          <div className="flex gap-2 items-center">
+            <Select
+              className="flex-1"
+              placeholder="选择参数预设"
+              value={selectedPreset}
+              onChange={handlePresetChange}
+            >
+              {Object.keys(presetParameters).map(key => (
+                <Option key={key} value={key}>
+                  {key}
+                </Option>
+              ))}
+            </Select>
+            <Button onClick={saveCurrentAsPreset}>+</Button>
+            <Button onClick={renameCurrentPreset} disabled={Object.keys(defaultPresetParameters).includes(selectedPreset)}>重命名</Button>
+            <Button onClick={deleteCurrentPreset} disabled={Object.keys(defaultPresetParameters).includes(selectedPreset)}>删除</Button>
+          </div>
           <div className="grid grid-cols-2 gap-2">
-            <Input
+            <CustomInput
               placeholder="question"
               value={userParameters.question}
-              onChange={(value) => setUserParameters(prev => ({ ...prev, question: value }))}
+              onChange={(e) => handleParameterChange('question', e.target.value)}
             />
-            <Input
+            <CustomInput
               placeholder="answer"
               value={userParameters.answer}
-              onChange={(value) => setUserParameters(prev => ({ ...prev, answer: value }))}
+              onChange={(e) => handleParameterChange('answer', e.target.value)}
             />
-            <Input
+            <CustomInput
               placeholder="question_stem"
               value={userParameters.question_stem}
-              onChange={(value) => setUserParameters(prev => ({ ...prev, question_stem: value }))}
+              onChange={(e) => handleParameterChange('question_stem', e.target.value)}
             />
-            <Input
+            <CustomInput
               placeholder="student_name"
               value={userParameters.student_name}
-              onChange={(value) => setUserParameters(prev => ({ ...prev, student_name: value }))}
+              onChange={(e) => handleParameterChange('student_name', e.target.value)}
             />
-            <Input
+            <CustomInput
               placeholder="question_category"
               value={userParameters.question_category}
-              onChange={(value) => setUserParameters(prev => ({ ...prev, question_category: value }))}
+              onChange={(e) => handleParameterChange('question_category', e.target.value)}
             />
           </div>
         </div>
