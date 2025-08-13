@@ -26,10 +26,12 @@ export default defineConfig({
     distPath: {
       html: '/',
     },
+    assetPrefix: '/aipet',
   },
-  // server:{
-  //   baseUrl: '/'
-  // },
+  dev: {
+    host: '0.0.0.0',
+    port: 8082,
+  },
   plugins: [
     appTools({
       bundler: 'rspack', // Set to 'webpack' to enable webpack

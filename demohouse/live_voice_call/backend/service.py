@@ -344,9 +344,10 @@ class VoiceBotService(BaseModel):
             yield TTSDonePayload()
             return
         
-        # Send sentence start event
-        INFO(f"[HTTP_TTS] 🎤 Sentence start: '{full_text[:50]}{'...' if len(full_text) > 50 else ''}'")
-        yield TTSSentenceStartPayload(sentence=full_text)
+        # 临时验证：直接整段文本给TTS
+        sentence = full_text.strip()
+        INFO(f"[DEBUG] TTS final sentence (bypass): '{sentence}' | 长度: {len(sentence)}")
+        yield TTSSentenceStartPayload(sentence=sentence)
         
         try:
             # Synthesize the full text
@@ -468,30 +469,14 @@ class VoiceBotService(BaseModel):
         if not self.dify_client:
             raise ValueError("Dify client not initialized")
         
-        # Prepare inputs with all user parameters
-        INFO(f"[DIFY_PREPARE] 🔍 Checking current parameter state before Dify call:")
-        INFO(f"  📝 question: '{self.current_question}' (len: {len(self.current_question)})")
-        INFO(f"  ✅ answer: '{self.current_answer}' (len: {len(self.current_answer)})")
-        INFO(f"  🗣️ user_responds: '{self.current_user_responds}' (len: {len(self.current_user_responds)})")
-        INFO(f"  📋 question_stem: '{self.current_question_stem}' (len: {len(self.current_question_stem)})")
-        INFO(f"  👤 student_name: '{self.current_student_name}' (len: {len(self.current_student_name)})")
-        INFO(f"  🏷️ question_category: '{self.current_question_category}' (len: {len(self.current_question_category)})")
+        # Prepare inputs for new Dify workflow with only user_input
+        user_input = text
+        
+        INFO(f"[DIFY_PREPARE] 📝 user_input: '{user_input}' (len: {len(user_input)})")
         
         inputs = {
-            "question": self.current_question,
-            "answer": self.current_answer,
-            "user_responds": self.current_user_responds,
-            "question_stem": self.current_question_stem,
-            "student_name": self.current_student_name,
-            "question_category": self.current_question_category,
+            "user_input": user_input,
         }
-        
-        # Validate inputs for empty values
-        empty_params = [k for k, v in inputs.items() if not v or v.strip() == ""]
-        if empty_params:
-            INFO(f"[DIFY_WARNING] ⚠️ Empty parameters detected: {empty_params}")
-        else:
-            INFO(f"[DIFY_VALIDATION] ✅ All parameters have values")
         
         # Generate timestamp for logging
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -502,9 +487,14 @@ class VoiceBotService(BaseModel):
         final_result = ""  # Store the final result from workflow_finished event
         
         try:
+            # Use consistent user_id for context continuity in Dify workflow
+            user_id = f"user-{self.current_student_name or 'anonymous'}-{hash(str(self.current_student_name)) % 10000}"
+            
+            INFO(f"[DIFY_PREPARE] 👤 user_id: '{user_id}' (for context continuity)")
+            
             async for chunk in self.dify_client.stream_workflow_run(
                 inputs=inputs,
-                user_id=f"user-{self.current_student_name or 'anonymous'}"
+                user_id=user_id
             ):
                 if chunk:
                     # Check if this is the final result (from workflow_finished event)
@@ -515,7 +505,7 @@ class VoiceBotService(BaseModel):
             # Only yield the final result for TTS, not intermediate chunks
             if final_result:
                 response_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-                INFO(f"[DIFY_RESPONSE] {response_timestamp} | SUCCESS | Result: {final_result}")
+                INFO(f"[DIFY_RESPONSE] {response_timestamp} | SUCCESS | Result: '{final_result}' | 长度: {len(final_result)}")
                 yield final_result
             else:
                 # Fallback if no final result
@@ -558,10 +548,14 @@ class VoiceBotService(BaseModel):
         INFO(f"  📝 question: '{self.current_question}' (len: {len(self.current_question) if self.current_question else 0})")
         INFO(f"  👤 student_name: '{self.current_student_name}' (len: {len(self.current_student_name) if self.current_student_name else 0})")
         
-        # Prepare inputs for opening greeting (can be empty for opening greeting)
+        # Prepare inputs for new Dify opening greeting workflow with only user_input
+        user_input = f"开场白问候"
+        if self.current_student_name:
+            user_input = f"{self.current_student_name}的问候开场白"
+        
+        INFO(f"[OPENING_GREETING] 📝 user_input: '{user_input}' (len: {len(user_input)})")
         inputs = {
-            "student_name": self.current_student_name or "同学",
-            "question": self.current_question or "问题",
+            "user_input": user_input,
         }
         
         INFO(f"[OPENING_GREETING] 📝 Sending inputs: {inputs}")
@@ -572,7 +566,7 @@ class VoiceBotService(BaseModel):
         try:
             async for chunk in self.dify_opening_client.stream_workflow_run(
                 inputs=inputs,
-                user_id=f"opening-{self.current_student_name or 'anonymous'}"
+                user_id=f"opening-{self.current_student_name or 'anonymous'}-{hash(str(self.current_student_name)) % 10000}"
             ):
                 if chunk:
                     final_result = chunk

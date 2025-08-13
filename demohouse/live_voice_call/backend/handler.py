@@ -32,10 +32,10 @@ TTS_APP_ID = "3735242956"
 # replace with your ark endpoint
 LLM_ENDPOINT_ID = "doubao-seed-1-6-250615"
 # replace with your dify API access
-DIFY_API_KEY = "app-JqtJdpgiEKukUAxxT8oiJR4u"
+DIFY_API_KEY = "app-nxb7ZW4Uy9DZmeEMoE2ibTDY"
 DIFY_BASE_URL = "https://api.dify.ai"
 # Opening greeting dify API access
-DIFY_OPENING_API_KEY = "app-rCIokTn1NixIujuo4M18feAW"
+DIFY_OPENING_API_KEY = "app-nxb7ZW4Uy9DZmeEMoE2ibTDY"
 # LLM Provider: "ark" or "dify"
 LLM_PROVIDER = "dify"
 
@@ -172,9 +172,9 @@ async def main():
     """
     Main function to start the WebSocket server.
     """
-    # Start the WebSocket server listening on 127.0.0.1:8888
-    server = await websockets.serve(handler, host="127.0.0.1", port=8888)
-    INFO("WebSocket server is running on ws://127.0.0.1:8888")
+    # Start the WebSocket server listening on 127.0.0.1:8889
+    server = await websockets.serve(handler, host="127.0.0.1", port=8889)
+    INFO("WebSocket server is running on ws://127.0.0.1:8889")
     await server.wait_closed()
 
 

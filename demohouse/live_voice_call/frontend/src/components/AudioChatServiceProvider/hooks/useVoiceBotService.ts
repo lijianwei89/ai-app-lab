@@ -125,7 +125,10 @@ export const useVoiceBotService = (userParameters: IUserParameters) => {
             break;
           case EventType.TTSSentenceStart:
             setCurrentBotSentence(prevSentence => {
-              const content = prevSentence + payload?.sentence || '';
+              console.log('[DEBUG] TTSSentenceStart payload:', payload);
+              const content = payload?.sentence || '';
+              console.log('[DEBUG] Extracted sentence:', content);
+            console.debug('[DEBUG] model answer:', payload?.sentence, payload?.sentence?.length);
               setChatMessages(prev => {
                 const lastBotIndex = prev.findLastIndex(
                   msg => msg.role === 'bot',
