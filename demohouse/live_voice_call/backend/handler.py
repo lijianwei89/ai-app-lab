@@ -26,9 +26,9 @@ from event import OpeningGreetingResponsePayload, WebEvent
 # replace with your asr API access
 ASR_ACCESS_TOKEN = "WDubf8FD7TunKdtBdzMnmLRuEzvximVu"
 ASR_APP_ID = "3735242956"
-# replace with your tts API access
-TTS_ACCESS_TOKEN = "WDubf8FD7TunKdtBdzMnmLRuEzvximVu"
-TTS_APP_ID = "3735242956"
+# TTS configuration for internal service
+TTS_ACCESS_TOKEN = "200000054:bebc3b8ce075b6fd94d04407e1ed6937"
+TTS_APP_ID = "200000054"
 # replace with your ark endpoint
 LLM_ENDPOINT_ID = "doubao-seed-1-6-250615"
 # replace with your dify API access
@@ -65,10 +65,10 @@ async def handler(websocket: websockets.WebSocketCommonProtocol, path):
         dify_base_url=DIFY_BASE_URL,
         # Opening greeting Dify configuration
         dify_opening_api_key=DIFY_OPENING_API_KEY,
-        # Enable HTTP TTS with cluster and voice_type support
+        # Enable HTTP TTS with internal service configuration
         use_http_tts=True,
-        tts_cluster="volcano_icl",
-        tts_voice_type="S_pic297Bs1",
+        tts_cluster="volcengine",
+        tts_voice_type="S_dwiOyLR61",
     )
     await service.init()
     # Send a bot ready message

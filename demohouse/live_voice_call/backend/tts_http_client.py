@@ -35,7 +35,7 @@ class TTSConfig:
     speed_ratio: float = 1.0
     volume_ratio: float = 1.0
     pitch_ratio: float = 1.0
-    host: str = "openspeech.bytedance.com"
+    host: str = "speech-internal.tal.com"
 
 
 @dataclass
@@ -52,8 +52,8 @@ class HTTPTTSClient:
     
     def __init__(self, config: TTSConfig):
         self.config = config
-        self.api_url = f"https://{config.host}/api/v1/tts"
-        self.headers = {"Authorization": f"Bearer;{config.access_token}"}
+        self.api_url = f"https://{config.host}/v1/tts"
+        self.headers = {"Authorization": f"Bearer {config.access_token}", "Content-Type": "application/json"}
         self._session: Optional[aiohttp.ClientSession] = None
         
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -69,31 +69,15 @@ class HTTPTTSClient:
             INFO("[HTTP_TTS] 🧹 HTTP session closed")
     
     def _build_request_payload(self, text: str) -> Dict[str, Any]:
-        """Build TTS request payload."""
+        """Build TTS request payload for internal TTS service."""
         return {
-            "app": {
-                "appid": self.config.app_id,
-                "token": "access_token",
-                "cluster": self.config.cluster
-            },
-            "user": {
-                "uid": "388808087185088"
-            },
-            "audio": {
-                "voice_type": self.config.voice_type,
-                "encoding": self.config.encoding,
-                "speed_ratio": self.config.speed_ratio,
-                "volume_ratio": self.config.volume_ratio,
-                "pitch_ratio": self.config.pitch_ratio,
-            },
-            "request": {
-                "reqid": str(uuid.uuid4()),
-                "text": text,
-                "text_type": "plain",
-                "operation": "query",
-                "with_frontend": 1,
-                "frontend_type": "unitTson"
-            }
+            "voice": f"{self.config.cluster}:{self.config.voice_type}",
+            "text": text,
+            "format": self.config.encoding,
+            "sample_rate": 24000,
+            "speed": int(self.config.speed_ratio),
+            "volume": int(self.config.volume_ratio),
+            "pitch": int(self.config.pitch_ratio)
         }
     
     async def synthesize_text(self, text: str) -> TTSResponse:
@@ -107,7 +91,7 @@ class HTTPTTSClient:
             )
         
         request_payload = self._build_request_payload(text)
-        request_id = request_payload["request"]["reqid"]
+        request_id = str(uuid.uuid4())
         
         INFO(f"[HTTP_TTS] 🚀 Synthesizing text (reqid={request_id[:8]}): '{text[:50]}{'...' if len(text) > 50 else ''}'")
         INFO(f"[HTTP_TTS] 🔧 Config: cluster={self.config.cluster}, voice_type={self.config.voice_type}")
@@ -136,18 +120,33 @@ class HTTPTTSClient:
                 
                 response_data = await response.json()
                 
-                if "data" not in response_data:
-                    error_msg = f"No audio data in response: {response_data}"
-                    ERROR(f"[HTTP_TTS] ❌ No audio data: {error_msg}")
+                # Check for internal TTS service format with nested data
+                if "data" in response_data and isinstance(response_data["data"], dict):
+                    data_obj = response_data["data"]
+                    if "audio" in data_obj:
+                        audio_data = base64.b64decode(data_obj["audio"])
+                    else:
+                        error_msg = f"No audio field in data object: {list(data_obj.keys())}"
+                        ERROR(f"[HTTP_TTS] ❌ {error_msg}")
+                        return TTSResponse(
+                            audio_data=b"",
+                            request_id=request_id,
+                            success=False,
+                            error_message=error_msg
+                        )
+                elif "audio" in response_data:
+                    audio_data = base64.b64decode(response_data["audio"])
+                elif "data" in response_data:
+                    audio_data = base64.b64decode(response_data["data"])
+                else:
+                    error_msg = f"No audio data in response: {list(response_data.keys())}"
+                    ERROR(f"[HTTP_TTS] ❌ {error_msg}")
                     return TTSResponse(
                         audio_data=b"",
                         request_id=request_id,
                         success=False,
                         error_message=error_msg
                     )
-                
-                # Decode base64 audio data
-                audio_data = base64.b64decode(response_data["data"])
                 
                 INFO(f"[HTTP_TTS] ✅ Synthesis successful in {duration:.2f}s: {len(audio_data)} bytes")
                 
