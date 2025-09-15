@@ -32,7 +32,7 @@ TTS_APP_ID = "200000054"
 # replace with your ark endpoint
 LLM_ENDPOINT_ID = "doubao-seed-1-6-250615"
 # replace with your dify API access
-DIFY_API_KEY = "app-nxb7ZW4Uy9DZmeEMoE2ibTDY"
+DIFY_API_KEY = "app-g9uued0gvSWkTfaz7n7Hs0mX"
 DIFY_BASE_URL = "https://api.dify.ai"
 # Opening greeting dify API access
 DIFY_OPENING_API_KEY = "app-nxb7ZW4Uy9DZmeEMoE2ibTDY"

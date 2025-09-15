@@ -126,9 +126,12 @@ export const useVoiceBotService = (userParameters: IUserParameters) => {
           case EventType.TTSSentenceStart:
             setCurrentBotSentence(prevSentence => {
               console.log('[DEBUG] TTSSentenceStart payload:', payload);
-              const content = payload?.sentence || '';
-              console.log('[DEBUG] Extracted sentence:', content);
-            console.debug('[DEBUG] model answer:', payload?.sentence, payload?.sentence?.length);
+              const newSentence = payload?.sentence || '';
+              console.log('[DEBUG] New sentence:', newSentence);
+              // Accumulate sentences instead of replacing
+              const fullContent = prevSentence ? prevSentence + newSentence : newSentence;
+              console.debug('[DEBUG] Full accumulated content:', fullContent);
+
               setChatMessages(prev => {
                 const lastBotIndex = prev.findLastIndex(
                   msg => msg.role === 'bot',
@@ -137,7 +140,7 @@ export const useVoiceBotService = (userParameters: IUserParameters) => {
 
                 const updatedBotMsg = {
                   ...lastBotMsg,
-                  content: content,
+                  content: fullContent,
                 };
                 return prev.map((msg, idx) => {
                   if (idx === lastBotIndex) {
@@ -147,7 +150,7 @@ export const useVoiceBotService = (userParameters: IUserParameters) => {
                   }
                 });
               });
-              return content;
+              return fullContent;
             });
             setBotSpeaking(true);
             break;

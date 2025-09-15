@@ -63,7 +63,7 @@ class DifyClient:
         payload = {
             "query": inputs.get("user_input", ""),
             "inputs": inputs,
-            "response_mode": "blocking",
+            "response_mode": "streaming",
             "user": user_id or f"user-{uuid.uuid4().hex[:8]}"
         }
         
@@ -123,7 +123,8 @@ class DifyClient:
                                             
                                             # Handle chatflow event types
                                             event_type = event_data.get('event')
-                                            if event_type in ['message', 'agent_message']:
+                                            if event_type == 'message':
+                                                # Extract streaming text content
                                                 text_content = event_data.get('answer', '')
                                                 if text_content:
                                                     yield text_content

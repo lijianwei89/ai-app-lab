@@ -331,43 +331,38 @@ class VoiceBotService(BaseModel):
     ) -> AsyncIterable[
         Union[TTSSentenceStartPayload, TTSSentenceEndPayload, TTSDonePayload]
     ]:
-        """Handle TTS responses using HTTP client."""
-        full_text = ""
-        
-        # Collect all LLM output chunks into a single text
-        async for chunk in llm_output:
-            if chunk:
-                full_text += chunk
-        
-        if not full_text.strip():
-            INFO("[HTTP_TTS] ⚠️ No text to synthesize")
-            yield TTSDonePayload()
-            return
-        
-        # 临时验证：直接整段文本给TTS
-        sentence = full_text.strip()
-        INFO(f"[DEBUG] TTS final sentence (bypass): '{sentence}' | 长度: {len(sentence)}")
-        yield TTSSentenceStartPayload(sentence=sentence)
-        
-        try:
-            # Synthesize the full text
-            tts_response = await self.http_tts_manager.synthesize(full_text)
-            
-            if tts_response.success and tts_response.audio_data:
-                INFO(f"[HTTP_TTS] ✅ Synthesis successful: {len(tts_response.audio_data)} bytes")
-                yield TTSSentenceEndPayload(data=tts_response.audio_data)
-            else:
-                ERROR(f"[HTTP_TTS] ❌ Synthesis failed: {tts_response.error_message}")
-                # Send empty audio data to avoid blocking the client
+        """Handle TTS responses using HTTP client with sentence-level streaming."""
+
+        # Process each sentence as it comes from LLM streaming
+        async for sentence in llm_output:
+            if not sentence or not sentence.strip():
+                continue
+
+            sentence = sentence.strip()
+            INFO(f"[HTTP_TTS] 🎤 Processing sentence: '{sentence}' | 长度: {len(sentence)}")
+
+            # Send TTSSentenceStart immediately when we receive a sentence
+            yield TTSSentenceStartPayload(sentence=sentence)
+
+            try:
+                # Synthesize this individual sentence
+                tts_response = await self.http_tts_manager.synthesize(sentence)
+
+                if tts_response.success and tts_response.audio_data:
+                    INFO(f"[HTTP_TTS] ✅ Sentence synthesis successful: {len(tts_response.audio_data)} bytes")
+                    yield TTSSentenceEndPayload(data=tts_response.audio_data)
+                else:
+                    ERROR(f"[HTTP_TTS] ❌ Sentence synthesis failed: {tts_response.error_message}")
+                    # Send empty audio data to avoid blocking the client
+                    yield TTSSentenceEndPayload(data=b"")
+
+            except Exception as e:
+                ERROR(f"[HTTP_TTS] 💥 Exception during sentence synthesis: {str(e)}")
                 yield TTSSentenceEndPayload(data=b"")
-        
-        except Exception as e:
-            ERROR(f"[HTTP_TTS] 💥 Exception during synthesis: {str(e)}")
-            yield TTSSentenceEndPayload(data=b"")
-        
-        finally:
-            INFO("[HTTP_TTS] 🏁 TTS session finished")
-            yield TTSDonePayload()
+
+        # Send final TTS done event
+        INFO("[HTTP_TTS] 🏁 All sentences processed")
+        yield TTSDonePayload()
     
     async def _handle_websocket_tts_response(
         self, llm_output: AsyncIterable[str]
@@ -492,21 +487,34 @@ class VoiceBotService(BaseModel):
             
             INFO(f"[DIFY_PREPARE] 👤 user_id: '{user_id}' (for context continuity)")
             
+            sentence_buffer = ""  # Buffer for building complete sentences
+
             async for chunk in self.dify_client.stream_workflow_run(
                 inputs=inputs,
                 user_id=user_id
             ):
                 if chunk:
-                    # Check if this is the final result (from workflow_finished event)
-                    # The Dify client now prioritizes 'result' field content
-                    final_result = chunk
                     completion_buffer += chunk
-            
-            # Only yield the final result for TTS, not intermediate chunks
-            if final_result:
+                    sentence_buffer += chunk
+
+                    # Check if we have a complete sentence (ends with punctuation)
+                    if chunk in ['。', '！', '？', '...', '…']:
+                        if sentence_buffer.strip():
+                            response_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                            INFO(f"[DIFY_STREAMING] {response_timestamp} | Sentence: '{sentence_buffer.strip()}' | 长度: {len(sentence_buffer.strip())}")
+                            yield sentence_buffer.strip()
+                            sentence_buffer = ""
+
+            # Yield any remaining content as final sentence
+            if sentence_buffer.strip():
                 response_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-                INFO(f"[DIFY_RESPONSE] {response_timestamp} | SUCCESS | Result: '{final_result}' | 长度: {len(final_result)}")
-                yield final_result
+                INFO(f"[DIFY_FINAL] {response_timestamp} | Final: '{sentence_buffer.strip()}' | 长度: {len(sentence_buffer.strip())}")
+                yield sentence_buffer.strip()
+
+            # Log the complete response
+            if completion_buffer:
+                response_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                INFO(f"[DIFY_RESPONSE] {response_timestamp} | COMPLETE | Result: '{completion_buffer}' | 长度: {len(completion_buffer)}")
             else:
                 # Fallback if no final result
                 response_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
