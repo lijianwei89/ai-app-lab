@@ -47,6 +47,11 @@ class DifyClient:
     ) -> AsyncIterable[str]:
         """
         Stream chat with Dify chatflow (previously workflow).
+
+        Note: To retrieve conversation_id from the response, use stream_workflow_run_with_metadata
+        """
+        """
+        Stream chat with Dify chatflow (previously workflow).
         
         Args:
             inputs (Dict[str, Any]): Input variables
@@ -136,6 +141,95 @@ class DifyClient:
                                         except json.JSONDecodeError as e:
                                             ERROR(f"Failed to parse Dify chatflow response: {e}")
                                             continue
+        except Exception as e:
+            ERROR(f"Dify Chatflow API request failed: {str(e)}")
+            raise
+
+    async def stream_workflow_run_with_metadata(
+        self,
+        inputs: Dict[str, Any],
+        user_id: Optional[str] = None,
+        conversation_id: Optional[str] = None,
+        files: Optional[list] = None
+    ) -> AsyncIterable[tuple[str, Optional[str]]]:
+        """
+        Stream chat with Dify chatflow and return both text content and conversation_id.
+
+        Returns:
+            AsyncIterable[tuple[str, Optional[str]]]: Yields (text_content, conversation_id)
+        """
+        url = f"{self.base_url}/v1/chat-messages"
+
+        # Prepare request payload for chatflow
+        payload = {
+            "query": inputs.get("user_input", ""),
+            "inputs": inputs,
+            "response_mode": "streaming",
+            "user": user_id or f"user-{uuid.uuid4().hex[:8]}"
+        }
+
+        if conversation_id:
+            payload["conversation_id"] = conversation_id
+
+        if files:
+            payload["files"] = files
+
+        INFO(f"Dify Chatflow API request (with metadata): {url}")
+        INFO(f"Dify Chatflow API payload: {json.dumps(payload, indent=2)}")
+
+        current_conversation_id = conversation_id
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                async with client.stream(
+                    'POST',
+                    url,
+                    headers=self.headers,
+                    json=payload
+                ) as response:
+                    if response.status_code != 200:
+                        error_text = await response.aread()
+                        ERROR(f"Dify Chatflow API error: {response.status_code} - {error_text}")
+                        raise Exception(f"Dify Chatflow API error: {response.status_code}")
+
+                    buffer = ""
+                    async for chunk in response.aiter_text():
+                        buffer += chunk
+                        # Process Server-Sent Events format
+                        lines = buffer.split('\n')
+                        buffer = lines[-1]  # Keep incomplete line in buffer
+
+                        for line in lines[:-1]:
+                            line = line.strip()
+                            if line.startswith('data: '):
+                                data = line[6:]  # Remove 'data: ' prefix
+                                if data == '[DONE]':
+                                    return
+                                if data:
+                                    try:
+                                        event_data = json.loads(data)
+                                        INFO(f"Dify chatflow streaming event: {event_data}")
+
+                                        # Extract conversation_id if available
+                                        if 'conversation_id' in event_data and not current_conversation_id:
+                                            current_conversation_id = event_data['conversation_id']
+                                            INFO(f"[CONVERSATION] Captured conversation_id: {current_conversation_id}")
+
+                                        # Handle chatflow event types
+                                        event_type = event_data.get('event')
+                                        if event_type == 'message':
+                                            # Extract streaming text content
+                                            text_content = event_data.get('answer', '')
+                                            if text_content:
+                                                yield (text_content, current_conversation_id)
+                                        elif event_type == 'error':
+                                            error_msg = event_data.get('message', 'Unknown error')
+                                            ERROR(f"Dify chatflow error: {error_msg}")
+                                            raise Exception(f"Dify chatflow error: {error_msg}")
+
+                                    except json.JSONDecodeError as e:
+                                        ERROR(f"Failed to parse Dify chatflow response: {e}")
+                                        continue
         except Exception as e:
             ERROR(f"Dify Chatflow API request failed: {str(e)}")
             raise

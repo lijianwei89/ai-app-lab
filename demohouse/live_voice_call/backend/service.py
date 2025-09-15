@@ -72,6 +72,9 @@ class VoiceBotService(BaseModel):
     dify_opening_api_key: Optional[str] = None
     dify_opening_client: Optional[DifyClient] = None
 
+    # Conversation management for Dify dialogue_count tracking
+    dify_conversation_id: Optional[str] = None
+
     history_messages: List[ArkMessage] = []  # Store historical dialogue information
 
     asr_buffer: str = ""  # Reservoir asr recognition result
@@ -489,10 +492,16 @@ class VoiceBotService(BaseModel):
             
             sentence_buffer = ""  # Buffer for building complete sentences
 
-            async for chunk in self.dify_client.stream_workflow_run(
+            async for chunk, conversation_id in self.dify_client.stream_workflow_run_with_metadata(
                 inputs=inputs,
-                user_id=user_id
+                user_id=user_id,
+                conversation_id=self.dify_conversation_id
             ):
+                # Update conversation_id if we received one and don't have one yet
+                if conversation_id and not self.dify_conversation_id:
+                    self.dify_conversation_id = conversation_id
+                    INFO(f"[CONVERSATION] 🔄 Stored conversation_id for dialogue tracking: {conversation_id}")
+
                 if chunk:
                     completion_buffer += chunk
                     sentence_buffer += chunk
