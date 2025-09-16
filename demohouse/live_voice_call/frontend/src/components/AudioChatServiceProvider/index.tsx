@@ -17,7 +17,7 @@ import { useSyncRef } from '@/hooks/useSyncRef';
 export const AudioChatServiceProvider: FC<PropsWithChildren> = ({
   children,
 }) => {
-  const [wsUrl, setWsUrl] = useState('ws://localhost:8889');
+  const [wsUrl, setWsUrl] = useState('ws://127.0.0.1:8889');
   const waveRef = useRef<any>(null);
   const recorderRef = useRef<any>(null);
   const sendPcmBufferRef = useRef(new Int16Array(0));

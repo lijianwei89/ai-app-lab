@@ -19,18 +19,20 @@ export const ChatMessageList = () => {
         'w-[500px] h-[700px] flex-shrink-0 pt-12 px-4 pb-4 rounded-[20px] bg-[#f2f3f5]  px-5 py-5 flex flex-col overflow-y-scroll gap-4'
       }
     >
-      {!chatMessages.length && <div>对话后展示消息记录...</div>}
+      {!chatMessages.length && (
+        <div className="flex flex-col items-center justify-center h-full text-center">
+          <div className="text-6xl mb-4 animate-bounce">🦫</div>
+          <div className="text-xl font-semibold text-[#507ef7] mb-2">小朋友，你来啦～</div>
+          <div className="text-sm text-gray-500">点击连接按钮开始和我聊天吧！</div>
+        </div>
+      )}
       {chatMessages.map(msg =>
         msg.role === 'bot' ? (
           <div>
             <div className={'select-none flex'}>
-              <img
-                className={'w-14 h-14 rounded-full mr-4'}
-                src={
-                  'https://lf3-static.bytednsdoc.com/obj/eden-cn/LM-STH-hahK/ljhwZthlaukjlkulzlp/ark/bot/audio_bot_demo/WrAtF2jBdl.png'
-                }
-                alt={''}
-              />
+              <div className="w-14 h-14 mr-4 flex items-center justify-center select-none">
+                <span className="text-3xl hover:scale-110 transition-transform duration-300 ease-in-out">🦫</span>
+              </div>
               <div
                 className={
                   'flex items-end max-w-[400px] p-5 rounded-b transition duration-500 rounded-tr mr-4 bg-gray-50 '

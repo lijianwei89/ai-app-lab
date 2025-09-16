@@ -25,19 +25,22 @@ export const Tel = () => {
       >
         <div className={'flex flex-col items-center justify-center gap-12'}>
           <div
-            className={'h-12 text-xl font-bold text-[#507ef7] text-center py-3'}
+            className={'h-16 text-3xl font-extrabold text-center py-3 tracking-wide mt-8'}
+            style={{
+              background: 'linear-gradient(135deg, #507ef7 0%, #6366f1 50%, #8b5cf6 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              textShadow: '0 2px 4px rgba(80, 126, 247, 0.2)',
+              filter: 'drop-shadow(0 2px 4px rgba(80, 126, 247, 0.2))'
+            }}
           >
-            语音 demo
+            AI🐾 Pet Demo
           </div>
           <div className={'flex flex-col justify-center items-center'}>
-            <img
-              src={
-                'https://lf3-static.bytednsdoc.com/obj/eden-cn/LM-STH-hahK/ljhwZthlaukjlkulzlp/ark/bot/audio_bot_demo/WrAtF2jBdl.png'
-              }
-              className={
-                'mt-16 w-[100px] h-[100px] rounded-full select-none  object-cover box-content'
-              }
-            />
+            <div className="mt-16 select-none">
+              <span className="text-8xl hover:scale-110 transition-transform duration-300 ease-in-out cursor-pointer">🦫</span>
+            </div>
           </div>
           <div
             className={
